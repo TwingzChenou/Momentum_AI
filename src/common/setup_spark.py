@@ -3,19 +3,12 @@ import sys
 from pyspark.sql import SparkSession
 from delta import configure_spark_with_delta_pip
 from loguru import logger
-from dotenv import load_dotenv
 
-import os
-import sys
-from pyspark.sql import SparkSession
-from delta import configure_spark_with_delta_pip
-from loguru import logger
-from dotenv import load_dotenv
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+from config.config_spark import Paths, GCP_KEY_PATH
 
 def create_spark_session(app_name: str = "SparkApp", log_level: str = "ERROR") -> SparkSession:
-    load_dotenv()
-    
-    GCP_KEY_PATH = os.getenv("GCP_KEY_PATH")
 
     # Use the shaded JAR directly to avoid Guava conflicts and Maven coordinate parsing errors
     gcs_jar_url = "https://repo1.maven.org/maven2/com/google/cloud/bigdataoss/gcs-connector/hadoop3-2.2.6/gcs-connector-hadoop3-2.2.6-shaded.jar"
