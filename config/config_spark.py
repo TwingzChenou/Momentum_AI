@@ -31,6 +31,12 @@ class Paths:
 
     # Specific Tables SILVER
     SP500_CONSOLIDATED_HISTORY = f"{SILVER}/sp500_consolidated_history"
+    SP500_STOCK_PRICES_SILVER = f"{SILVER}/sp500_stock_prices"
+    SP500_INCOME_STATEMENT_SILVER = f"{SILVER}/sp500_income_statement"
+    SP500_BALANCE_SHEET_SILVER = f"{SILVER}/sp500_balance_sheet"
+    SP500_CASH_FLOW_SILVER = f"{SILVER}/sp500_cash_flow"
+    SP500_RATING_SILVER = f"{SILVER}/sp500_rating"
+    SP500_RATIOS_SILVER = f"{SILVER}/sp500_ratios"
     
 
     
