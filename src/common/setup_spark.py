@@ -9,6 +9,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 from config.config_spark import Paths, GCP_KEY_PATH
 
 def create_spark_session(app_name: str = "SparkApp", log_level: str = "ERROR") -> SparkSession:
+    # Prevent PYSPARK_PYTHON mismatch errors by forcing workers to match the driver executable
+    os.environ["PYSPARK_PYTHON"] = sys.executable
+    os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
 
     # Use the shaded JAR directly to avoid Guava conflicts and Maven coordinate parsing errors
     gcs_jar_url = "https://repo1.maven.org/maven2/com/google/cloud/bigdataoss/gcs-connector/hadoop3-2.2.6/gcs-connector-hadoop3-2.2.6-shaded.jar"
@@ -17,6 +20,9 @@ def create_spark_session(app_name: str = "SparkApp", log_level: str = "ERROR") -
 
     builder = SparkSession.builder.master("local[*]") \
         .appName(app_name) \
+        .config("spark.driver.memory", "8g") \
+        .config("spark.executor.memory", "8g") \
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .config("spark.hadoop.fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem") \

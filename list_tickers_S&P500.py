@@ -14,10 +14,10 @@ os.environ['PYSPARK_PYTHON'] = sys.executable
 os.environ['PYSPARK_DRIVER_PYTHON'] = sys.executable
 
 # Add project root to sys.path to allow importing from src
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
-from config.config_spark import SP500_HISTORY
+from config.config_spark import Paths
 
 
 def get_sp500_history_from_wikipedia():
@@ -99,7 +99,7 @@ def get_sp500_history_from_wikipedia():
 
 def save_history_to_lake(spark, pandas_df):
     """Saves the historical composition DataFrame to Delta Lake."""
-    logger.info(f"💾 Saving History to {SP500_HISTORY}...")
+    logger.info(f"💾 Saving History to {Paths.SP500_LIST_TICKERS}...")
     
     # Define Schema Explicitly
     schema = StructType([
@@ -116,7 +116,7 @@ def save_history_to_lake(spark, pandas_df):
         # Write to Delta (Overwrite mode for full history refresh)
         sdf.write.format("delta") \
             .mode("overwrite") \
-            .save(SP500_HISTORY)
+            .save(Paths.SP500_LIST_TICKERS)
             
         logger.success("✅ Success! History saved.")
         

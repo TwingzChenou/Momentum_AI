@@ -1,24 +1,39 @@
 import os
 import sys
-from dotenv import load_dotenv
+from loguru import logger
 
 # Force Spark to use the Python version of the current environment
 os.environ['PYSPARK_PYTHON'] = sys.executable
 os.environ['PYSPARK_DRIVER_PYTHON'] = sys.executable
 
 # Add project root to sys.path to allow importing from src
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
+from config.config_spark import Paths
 
-# Load environment variables
-load_dotenv()
 
-# --- CONFIGURATION ---
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-LAKE_PATH = 
+def read_sp500_history(spark):
+    """Reads the S&P 500 history from Delta Lake."""
+    logger.info(f"Reading S&P 500 history from {Paths.SP500_BALANCE_SHEET}...")
+    df = spark.read.format("delta").load(Paths.SP500_BALANCE_SHEET)
+    logger.info(f"Found {df.count()} records in S&P 500 history.")
+    logger.info(f"Columns: {df.columns}")
+    logger.info(f"Schema: {df.schema}")
+    return df
 
-if not BUCKET_NAME:
-    raise ValueError("BUCKET_NAME environment variable is not set")
+def main():
+    setup_logging()
+    logger.info("Starting Spark session...")
+    spark = create_spark_session()
 
-HISTORY_LAKE_PATH = f"gs://{BUCKET_NAME}/silver/sp500_composition_history"
+    logger.info("Reading S&P 500 history...")
+    df = read_sp500_history(spark)
+
+    logger.info("Showing S&P 500 history...")
+    df[df['symbol'] == 'AAPL'].show()
+    logger.info("Stopping Spark session...")
+    spark.stop()
+
+if __name__ == "__main__":
+    main()

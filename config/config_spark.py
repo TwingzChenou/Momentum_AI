@@ -17,9 +17,24 @@ class Paths:
     SILVER = f"gs://{BUCKET_NAME}/silver"
     GOLD   = f"gs://{BUCKET_NAME}/gold"
     
-    # Specific Tables
-    STOCK_PRICES = f"{BRONZE}/stock_prices"
-    SP500_HISTORY = f"{SILVER}/sp500_composition_history"
+    # Specific Tables BRONZE
+    SP500_LATEST_TICKERS = f"{BRONZE}/sp500_latest_tickers"
+    SP500_LIST_TICKERS = f"{BRONZE}/sp500_list_tickers"
+    SP500_STOCK_PRICES = f"{BRONZE}/sp500_stock_prices"
+    SP500_INCOME_STATEMENT = f"{BRONZE}/sp500_income_statement"
+    SP500_BALANCE_SHEET = f"{BRONZE}/sp500_balance_sheet"
+    SP500_CASH_FLOW = f"{BRONZE}/sp500_cash_flow"
+    SP500_RATING = f"{BRONZE}/sp500_rating"
+    SP500_RATIOS = f"{BRONZE}/sp500_ratios"
+    SP500_CONSOLIDATED_HISTORY = f"{SILVER}/sp500_consolidated_history"
+
+
+    # Specific Tables SILVER
+    SP500_CONSOLIDATED_HISTORY = f"{SILVER}/sp500_consolidated_history"
+    
+
+    
+
 
 # 4. Verification (Optional but recommended)
 if not BUCKET_NAME:
