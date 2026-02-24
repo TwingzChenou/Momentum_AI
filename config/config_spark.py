@@ -37,9 +37,11 @@ class Paths:
     SP500_CASH_FLOW_SILVER = f"{SILVER}/sp500_cash_flow"
     SP500_RATING_SILVER = f"{SILVER}/sp500_rating"
     SP500_RATIOS_SILVER = f"{SILVER}/sp500_ratios"
+    MACRO_PRICES_SILVER = f"{SILVER}/macro_prices"
     
+    # Specific Tables GOLD
+    SP500_STOCK_PRICES_GOLD = f"{GOLD}/sp500_stock_prices"
 
-    
 
 
 # 4. Verification (Optional but recommended)
