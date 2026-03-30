@@ -92,58 +92,8 @@ print(f"Data after target creation: {df.shape}")
     nb['cells'].append(nbf.v4.new_code_cell(code_target))
 
 
-    # 2. Expanding Window Time-Series Split
-    markdown_split = "## 2. Expanding Window Time-Series Split"
-    nb['cells'].append(nbf.v4.new_markdown_cell(markdown_split))
-
-    code_split = """def get_train_val_test_splits(df, initial_train_years=3, val_years=2, test_years=1):
-    \"\"\"
-    Yields train, val, test indices for an expanding window split.
-    \"\"\"
-    years = sorted(df['year'].unique())
-    start_year = years[0]
-    
-    current_test_year = start_year + initial_train_years + val_years
-    
-    splits = []
-    
-    while current_test_year <= years[-1]:
-        train_end = current_test_year - val_years - 1
-        val_end = current_test_year - 1
-        
-        train_idx = df[df['year'] <= train_end].index
-        val_idx = df[(df['year'] > train_end) & (df['year'] <= val_end)].index
-        test_idx = df[df['year'] == current_test_year].index
-        
-        splits.append((train_idx, val_idx, test_idx, current_test_year))
-        current_test_year += 1
-        
-    return splits
-
-splits = get_train_val_test_splits(df)
-print(f"Total expanding window splits: {len(splits)}")
-for i, (tr, val, ts, yr) in enumerate(splits):
-    print(f"Split {i+1} | Test Year: {yr} | Train: {len(tr)} | Val: {len(val)} | Test: {len(ts)}")
-"""
-    nb['cells'].append(nbf.v4.new_code_cell(code_split))
-
-    # 3. Evaluation Metrics
-    markdown_metrics = "## 3. Evaluation Metrics ($R^2_{OOS}$)"
-    nb['cells'].append(nbf.v4.new_markdown_cell(markdown_metrics))
-
-    code_metrics = """def calculate_r2_oos(y_true, y_pred):
-    \"\"\"
-    Out-of-Sample R^2.
-    Denominator uses 0 as the prediction benchmark (predicting exactly zero excess return).
-    \"\"\"
-    numerator = np.sum((y_true - y_pred)**2)
-    denominator = np.sum((y_true - 0)**2)
-    return 1 - (numerator / denominator)
-"""
-    nb['cells'].append(nbf.v4.new_code_cell(code_metrics))
-
-    # 4. Model Architectures
-    markdown_models = "## 4. Algorithm Model Architectures"
+    # 2. Algorithm Model Architectures
+    markdown_models = "## 2. Algorithm Model Architectures"
     nb['cells'].append(nbf.v4.new_markdown_cell(markdown_models))
     
     # Feature engineering
@@ -186,7 +136,7 @@ df = df.reset_index(drop=True)
     nb['cells'].append(nbf.v4.new_markdown_cell(markdown_dnn))
 
     code_dnn = """def build_model(hp, input_dim):
-    \"\"\"KerasTuner model building function\"\"\"
+    '''KerasTuner model building function'''
     model = keras.Sequential()
     model.add(layers.Input(shape=(input_dim,)))
     
@@ -282,14 +232,64 @@ def predict_dnn_ensemble(models, scaler, X_test):
 """
     nb['cells'].append(nbf.v4.new_code_cell(code_dnn))
 
+    # 3. Expanding Window Time-Series Split
+    markdown_split = "## 3. Expanding Window Time-Series Split"
+    nb['cells'].append(nbf.v4.new_markdown_cell(markdown_split))
+
+    code_split = """def get_train_val_test_splits(df, initial_train_years=3, val_years=2, test_years=1):
+    '''
+    Yields train, val, test indices for an expanding window split.
+    '''
+    years = sorted(df['year'].unique())
+    start_year = years[0]
+    
+    current_test_year = start_year + initial_train_years + val_years
+    
+    splits = []
+    
+    while current_test_year <= years[-1]:
+        train_end = current_test_year - val_years - 1
+        val_end = current_test_year - 1
+        
+        train_idx = df[df['year'] <= train_end].index
+        val_idx = df[(df['year'] > train_end) & (df['year'] <= val_end)].index
+        test_idx = df[df['year'] == current_test_year].index
+        
+        splits.append((train_idx, val_idx, test_idx, current_test_year))
+        current_test_year += 1
+        
+    return splits
+
+splits = get_train_val_test_splits(df)
+print(f"Total expanding window splits: {len(splits)}")
+for i, (tr, val, ts, yr) in enumerate(splits):
+    print(f"Split {i+1} | Test Year: {yr} | Train: {len(tr)} | Val: {len(val)} | Test: {len(ts)}")
+"""
+    nb['cells'].append(nbf.v4.new_code_cell(code_split))
+
+    # 4. Evaluation Metrics
+    markdown_metrics = "## 4. Evaluation Metrics ($R^2_{OOS}$)"
+    nb['cells'].append(nbf.v4.new_markdown_cell(markdown_metrics))
+
+    code_metrics = """def calculate_r2_oos(y_true, y_pred):
+    '''
+    Out-of-Sample R^2.
+    Denominator uses 0 as the prediction benchmark (predicting exactly zero excess return).
+    '''
+    numerator = np.sum((y_true - y_pred)**2)
+    denominator = np.sum((y_true - 0)**2)
+    return 1 - (numerator / denominator)
+"""
+    nb['cells'].append(nbf.v4.new_code_cell(code_metrics))
+
     # 5. Backtesting Portfolio Construction
     markdown_bt = "## 5. Backtesting Portfolio Construction (Decile Sorting)"
     nb['cells'].append(nbf.v4.new_markdown_cell(markdown_bt))
     
     code_bt = """def backtest_portfolio(test_df, predictions_col):
-    \"\"\"
-    Simulates a Long/Short Value-Weighted portfolio.
-    \"\"\"
+    '''
+    Simulates a Long/Short Value-Weighted portfolio and calculates performance metrics.
+    '''
     results = []
     
     for (year, month), month_data in test_df.groupby(['year', 'month']):
@@ -301,7 +301,11 @@ def predict_dnn_ensemble(models, scaler, X_test):
             month_data['decile'] = pd.qcut(month_data[predictions_col], 10, labels=False) + 1
             
             if 'dollar_volume' not in month_data.columns:
-                month_data['dollar_volume'] = month_data['volume'] * month_data['adjClose']
+                # Fallback to equal weighting if volume/adjClose are missing
+                if 'volume' in month_data.columns and 'adjClose' in month_data.columns:
+                    month_data['dollar_volume'] = month_data['volume'] * month_data['adjClose']
+                else:
+                    month_data['dollar_volume'] = 1.0
             
             long_portfolio = month_data[month_data['decile'] == 10]
             short_portfolio = month_data[month_data['decile'] == 1]
@@ -328,7 +332,37 @@ def predict_dnn_ensemble(models, scaler, X_test):
         except Exception as e:
             pass
             
-    return pd.DataFrame(results)
+    bt_df = pd.DataFrame(results)
+    if bt_df.empty:
+        return bt_df, {}
+        
+    bt_df['cum_return'] = (1 + bt_df['portfolio_return']).cumprod()
+    
+    # Calculate Metrics
+    n_years = len(bt_df) / 12.0
+    cagr = (bt_df['cum_return'].iloc[-1]) ** (1 / n_years) - 1 if n_years > 0 else 0
+    
+    mean_ret = bt_df['portfolio_return'].mean()
+    std_ret = bt_df['portfolio_return'].std()
+    sharpe = (mean_ret / std_ret) * np.sqrt(12) if std_ret > 0 else 0
+    
+    rolling_max = bt_df['cum_return'].cummax()
+    drawdown = (bt_df['cum_return'] - rolling_max) / rolling_max
+    max_dd = drawdown.min()
+    
+    metrics = {
+        'CAGR': cagr,
+        'Sharpe_Ratio': sharpe,
+        'Max_Drawdown': max_dd
+    }
+    
+    print(f"--- Metrics ({predictions_col}) ---")
+    print(f"CAGR: {cagr:.2%}")
+    print(f"Sharpe Ratio: {sharpe:.2f}")
+    print(f"Max Drawdown: {max_dd:.2%}")
+    print("-" * 30)
+    
+    return bt_df, metrics
 """
     nb['cells'].append(nbf.v4.new_code_cell(code_bt))
 
@@ -378,21 +412,26 @@ if len(splits) > 0:
         test_df['dnn_pred'] = dnn_preds
         
         print("Running Backtest for RF Strategy...")
-        bt_rf = backtest_portfolio(test_df, 'rf_pred')
+        bt_rf, metrics_rf = backtest_portfolio(test_df, 'rf_pred')
         
         print("Running Backtest for DNN Strategy...")
-        bt_dnn = backtest_portfolio(test_df, 'dnn_pred')
+        bt_dnn, metrics_dnn = backtest_portfolio(test_df, 'dnn_pred')
         
         # Compute Cumulative Returns
         if not bt_rf.empty and not bt_dnn.empty:
-            bt_rf['cum_return'] = (1 + bt_rf['portfolio_return']).cumprod()
-            bt_dnn['cum_return'] = (1 + bt_dnn['portfolio_return']).cumprod()
-            
-            # Log total returns
+            # Log total returns and new metrics
             total_ret_rf = bt_rf['cum_return'].iloc[-1] - 1
             total_ret_dnn = bt_dnn['cum_return'].iloc[-1] - 1
-            mlflow.log_metric("Total_Return_RF", total_ret_rf)
-            mlflow.log_metric("Total_Return_DNN", total_ret_dnn)
+            mlflow.log_metric("RF_Total_Return", total_ret_rf)
+            mlflow.log_metric("DNN_Total_Return", total_ret_dnn)
+            
+            mlflow.log_metric("RF_CAGR", metrics_rf.get('CAGR', 0))
+            mlflow.log_metric("RF_Sharpe", metrics_rf.get('Sharpe_Ratio', 0))
+            mlflow.log_metric("RF_MaxDD", metrics_rf.get('Max_Drawdown', 0))
+            
+            mlflow.log_metric("DNN_CAGR", metrics_dnn.get('CAGR', 0))
+            mlflow.log_metric("DNN_Sharpe", metrics_dnn.get('Sharpe_Ratio', 0))
+            mlflow.log_metric("DNN_MaxDD", metrics_dnn.get('Max_Drawdown', 0))
             
             plt.figure(figsize=(10,6))
             plt.plot(bt_rf['date'], bt_rf['cum_return'], label='RF Long/Short')

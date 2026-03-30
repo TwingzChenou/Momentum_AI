@@ -42,6 +42,9 @@ def main():
         .filter(col("volume") > 0) \
         .filter(col("adjClose") > 0) \
         .dropna(subset=["adjClose", "date", "symbol"])
+
+        tickers_to_exclude = ['EF', 'JBL', 'HP', 'TMUS', 'FMCC', 'FNMA', 'CTX', 'AET', 'MXIM', 'PARA']
+        df_silver = df_silver.filter(~col("symbol").isin(tickers_to_exclude))
     
         # ------------------------------------------
 

@@ -1,0 +1,6 @@
+               Métrique S&P 500 (Benchmark)     DNN      RF      LR XGBOOST LIGHTGBM CATBOOST
+           Total Return             305.50% 132.33% 175.69% 165.79% 201.95%  193.56%  176.14%
+       CAGR (Annualisé)              15.03%   8.80%  10.67%  10.27%  11.68%   11.37%   10.69%
+           Sharpe Ratio                0.84    0.46    0.57    0.52    0.62     0.60     0.56
+           Max Drawdown             -33.12% -52.55% -44.72% -49.70% -41.46%  -42.38%  -45.11%
+Probabilité Overfitting                 N/A   0.00%   0.00%   0.00%   0.00%    0.00%    0.00%

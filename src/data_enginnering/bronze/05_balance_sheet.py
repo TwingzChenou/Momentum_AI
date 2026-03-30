@@ -9,7 +9,7 @@ from loguru import logger
 from pyspark.sql.types import StringType
 from pyspark.sql.functions import col, to_date
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
 from config.config_spark import Paths
@@ -25,7 +25,7 @@ async def fetch_balance_sheet_for_ticker(session, semaphore, ticker):
     """
     url = f"{BASE_URL}/balance-sheet-statement?symbol={ticker}&limit=1000&period=quarterly&apikey={FMP_API_KEY}"
     
-    max_retries = 2
+    max_retries = 5
     base_delay = 5
 
     async with semaphore:

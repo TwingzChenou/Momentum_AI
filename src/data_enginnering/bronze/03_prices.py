@@ -9,7 +9,7 @@ from loguru import logger
 from pyspark.sql.types import StructType, StructField, StringType, DateType, DoubleType, LongType
 from pyspark.sql.functions import col, to_date
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
 from config.config_spark import Paths
@@ -224,6 +224,17 @@ def main():
             logger.info(f"💾 Saving to local cache {cache_file} before writing to Delta...")
             df_prices.to_parquet(cache_file, index=False)
         
+        # Exclude specific tickers
+        tickers_to_exclude = [
+            'EP', 'JBL', 'HP', 'TMUS', 'FMCC', 'FNMA', 'CTX', 'AET', 'MXIM', 'PARA', 
+            'BHF', 'BCR', 'AN', 'CPGX', 'CMCSK', 'CMA', 'ILMN', 'RHI', 'PXD', 'XRAY', 
+            'VFC', 'DXC', 'VNO', 'MBC', 'UA', 'DISCK', 'INFO', 'HFC', 'NBL', 'RTN', 
+            'M', 'TEL', 'GM', 'GGP', 'UIS', 'COOP', 'SAF', 'LEHMQ', 'FMCC', 'FNMA', 
+            'FDC', 'MERQ', 'G', 'RNB', 'COC-B', 'RAL', 'TOS', 'AFS-A', 'UMG', 'ASR'
+        ]
+        logger.info(f"🚫 Excluding {len(set(tickers_to_exclude))} specific tickers before saving to Delta Lake.")
+        df_prices = df_prices[~df_prices['symbol'].isin(tickers_to_exclude)]
+
         # 4. Save to Bronze
         save_prices_to_lake(spark, df_prices)
 

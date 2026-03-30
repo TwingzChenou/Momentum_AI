@@ -7,7 +7,7 @@ from pyspark.sql.window import Window
 from loguru import logger
 
 # Add project root to sys.path to allow importing from src
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
 from config.config_spark import Paths
@@ -79,6 +79,9 @@ def process_sp500_consolidated_history(spark):
     df_final = df_cleaned.withColumn("Date_end", F.coalesce(col("Date_end"), F.current_date())) \
                          .filter(col("Date_start") <= col("Date_end")) \
                          .select("Ticker", "Date_start", "Date_end")
+
+    tickers_to_exclude = ['EF', 'JBL', 'HP', 'TMUS', 'FMCC', 'FNMA', 'CTX', 'AET', 'MXIM', 'PARA']
+    df_final = df_final.filter(~col("Ticker").isin(tickers_to_exclude))
 
     return df_final
 

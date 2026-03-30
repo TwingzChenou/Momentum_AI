@@ -96,6 +96,11 @@ async def get_general_news(session):
     response = await fetch_json(session, url)
     return pd.DataFrame(response)
 
+async def get_earnings_calendar(session):
+    url = f"{BASE_URL}/earnings-calendar?symbol=AAPL&limit=4000&period=quarterly&apikey={FMP_API_KEY}"
+    response = await fetch_json(session, url)
+    return pd.DataFrame(response)   
+
 async def main():
     setup_logging()
     
@@ -116,7 +121,8 @@ async def main():
             "earnings_report": earnings_report(session),
             "sp500_ohlcv": get_sp500_OHLCV(session),
             "company_screener": company_screener(session),
-            "general_news": get_general_news(session)
+            "general_news": get_general_news(session),
+            "earnings_calendar": get_earnings_calendar(session)
         }
         
         # Run all tasks concurrently
@@ -172,6 +178,11 @@ async def main():
         logger.info(data["general_news"])
 
         print(data["general_news"]["date"])
+
+        print("Earnings Calendar: ")
+        logger.info(data["earnings_calendar"])
+
+        print(data["earnings_calendar"]["date"])
 
 if __name__ == "__main__":
     asyncio.run(main())
