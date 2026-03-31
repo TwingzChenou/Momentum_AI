@@ -78,6 +78,9 @@ class Paths:
     SP500_STOCK_PRICES_GOLD = f"{GOLD}/sp500_stock_prices"
     TREASURY_BOND_GOLD = f"{GOLD}/treasury_bond"
     SP500_STOCK_PRICES_WEEKLY_GOLD = f"{GOLD}/sp500_stock_prices_weekly"
+    
+    DATA_RAW_2B_WEEKLY_GOLD = f"{GOLD}/data_raw_2b_weekly"
+    DATA_RAW_ETF_WEEKLY_GOLD = f"{GOLD}/data_raw_etf_weekly"
     SP500_MOMENTUM_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_weekly"
     SP500_MOMENTUM_VALUE_PROFITABLE_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_value_profitable_weekly"
     SP500_MOMENTUM_VALUE_PROFITABLE_TREND_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_value_profitable_trend_weekly"
