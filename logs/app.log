@@ -60,3 +60,11 @@
 Invalid column names: Adj Close.
 Please use other characters and try again.
 Alternatively, enable Column Mapping to keep using these characters.
+2026-03-31 10:57:53 | ERROR | 
+1 Failed download:
+2026-03-31 10:57:53 | ERROR | ['MGA']: TypeError("'NoneType' object is not subscriptable")
+2026-03-31 11:17:39 | CRITICAL | ❌ Critical Error in job execution: type object 'Paths' has no attribute 'DATA_RAW_ETF_WEEKLY'
+2026-03-31 11:18:33 | ERROR | 
+15 Failed downloads:
+2026-03-31 11:18:33 | ERROR | ['XLC', 'XLB', 'VNQ', 'XLK', 'GLD', 'HYG', 'XLE', 'XLI', 'XLU', 'XLV', 'XLY', 'XLP', 'TLT', 'IEF', 'XLRE']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+2026-03-31 11:18:33 | ERROR | ❌ No data retrieved from yfinance.

@@ -43,6 +43,11 @@ class Paths:
 
     LIST_TICKER_2B = f"{BRONZE}/list_ticker_2b"
     DATA_RAW_2B = f"{BRONZE}/data_raw_2b"
+    DATA_RAW_2B_WEEKLY = f"{BRONZE}/data_raw_2b_weekly"
+    DATA_RAW_2B_MONTHLY = f"{BRONZE}/data_raw_2b_monthly"
+    DATA_RAW_ETF = f"{BRONZE}/data_raw_etf"
+    DATA_RAW_ETF_WEEKLY = f"{BRONZE}/data_raw_etf_weekly"
+    DATA_RAW_ETF_MONTHLY = f"{BRONZE}/data_raw_etf_monthly"
     
 
 
@@ -61,6 +66,13 @@ class Paths:
     SP500_CASH_FLOW_GROWTH_SILVER = f"{SILVER}/sp500_cash_flow_growth"
     SP500_FINANCIAL_STATEMENT_GROWTH_SILVER = f"{SILVER}/sp500_financial_statement_growth"
     SP500_EARNINGS_SURPRISE_SILVER = f"{SILVER}/sp500_earnings_surprise"
+
+    DATA_RAW_2B_SILVER = f"{SILVER}/data_raw_2b"
+    DATA_RAW_2B_WEEKLY_SILVER = f"{SILVER}/data_raw_2b_weekly"
+    DATA_RAW_2B_MONTHLY_SILVER = f"{SILVER}/data_raw_2b_monthly"
+    DATA_RAW_ETF_SILVER = f"{SILVER}/data_raw_etf"
+    DATA_RAW_ETF_WEEKLY_SILVER = f"{SILVER}/data_raw_etf_weekly"
+    DATA_RAW_ETF_MONTHLY_SILVER = f"{SILVER}/data_raw_etf_monthly"
     
     # Specific Tables GOLD
     SP500_STOCK_PRICES_GOLD = f"{GOLD}/sp500_stock_prices"
