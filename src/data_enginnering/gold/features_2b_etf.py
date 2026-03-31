@@ -31,13 +31,12 @@ etf_schema = StructType([
 ])
 
 def process_etf_features(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        df_empty = pd.DataFrame(columns=[f.name for f in etf_schema.fields])
-        df_empty['Date'] = df_empty['Date'].astype(str)
-        for c in ['Close', 'SMA_12', 'SMA_26', 'SMA_50', 'Momentum_3M']:
-            df_empty[c] = pd.to_numeric(df_empty[c], errors='coerce').astype('float64')
-        return df_empty
-        
+    if len(df) < 30:
+        # Pre-filter in Spark should prevent this, but just in case
+        return pd.DataFrame(columns=[f.name for f in etf_schema.fields]).astype({
+            'Date': 'str', 'Ticker': 'str', 'Close': 'float', 'SMA_12': 'float', 
+            'SMA_26': 'float', 'SMA_50': 'float', 'Momentum_3M': 'float'
+        })
     df = df.sort_values("Date")
     df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
     
@@ -72,13 +71,12 @@ def process_stock_features(df: pd.DataFrame) -> pd.DataFrame:
     Applied to grouped Pandas dataframe per Ticker.
     df in input is daily data. Output must be weekly aggregated.
     """
-    if df.empty:
-        df_empty = pd.DataFrame(columns=[f.name for f in stock_schema.fields])
-        df_empty['Date'] = df_empty['Date'].astype(str)
-        for c in ['AdjClose', 'ADX_20', 'ATR_14', 'SMA_12', 'SMA_26', 'SMA_50', 'ATR_pct', 'Momentum_3M', 'Momentum_1W']:
-            df_empty[c] = pd.to_numeric(df_empty[c], errors='coerce').astype('float64')
-        return df_empty
-        
+    if len(df) < 50:
+        return pd.DataFrame(columns=[f.name for f in stock_schema.fields]).astype({
+            'Date': 'str', 'Ticker': 'str', 'AdjClose': 'float', 'ADX_20': 'float',
+            'ATR_14': 'float', 'SMA_12': 'float', 'SMA_26': 'float', 'SMA_50': 'float',
+            'ATR_pct': 'float', 'Momentum_3M': 'float', 'Momentum_1W': 'float'
+        })
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values("Date").set_index("Date")
     
@@ -154,7 +152,14 @@ def main():
             df_stock_silver = spark.read.format("delta").load(Paths.DATA_RAW_2B_SILVER)
             if not df_stock_silver.isEmpty():
                 df_stock_clean = df_stock_silver.dropna(subset=['High', 'Low', 'AdjClose'])
-                df_stock_gold = df_stock_clean.groupby("Ticker").applyInPandas(process_stock_features, schema=stock_schema)
+                
+                # IMPORTANT: Pre-filter small groups to prevent Arrow NPE on empty DF conversions
+                from pyspark.sql.functions import count
+                ticker_counts = df_stock_clean.groupBy("Ticker").agg(count("*").alias("cnt"))
+                valid_tickers = ticker_counts.filter(col("cnt") > 50).select("Ticker")
+                df_stock_clean = df_stock_clean.join(valid_tickers, on="Ticker", how="inner")
+                
+                df_stock_gold = df_stock_clean.groupBy("Ticker").applyInPandas(process_stock_features, schema=stock_schema)
                 df_stock_gold = df_stock_gold.withColumn("Date", col("Date").cast("date"))
                 save_to_delta(df_stock_gold, Paths.DATA_RAW_2B_WEEKLY_GOLD, "Stocks Gold (Weekly Aggregated)")
             else:

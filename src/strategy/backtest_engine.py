@@ -39,17 +39,25 @@ class RegimeSwitchingMomentumBacktester:
         return sp500[['Close', 'SMA_12', 'SMA_26', 'Regime']]
 
     def load_and_prep_data(self, spark_session, path_etf_gold, path_stocks_gold):
-        logger.info(f"📡 Loading ETF Data from Gold: {path_etf_gold}")
-        df_etf = spark_session.read.format("delta").load(path_etf_gold).toPandas()
-        
+        try:
+            logger.info(f"📡 Loading ETF Data from Gold: {path_etf_gold}")
+            df_etf = spark_session.read.format("delta").load(path_etf_gold).toPandas()
+        except Exception as e:
+            logger.warning(f"⚠️ Le chemin {path_etf_gold} n'existe pas ou est vide. On utilise un DataFrame vide.")
+            df_etf = pd.DataFrame()
+            
         if not df_etf.empty:
             df_etf['Date'] = pd.to_datetime(df_etf['Date']).dt.normalize()
             # Règles d'éligibilité pour les ETFs fixées dans le notebook : (SMA_12 > SMA_26) AND (Price > SMA_26)
             df_etf['Eligible'] = (df_etf['SMA_12'] > df_etf['SMA_26']) & (df_etf['Close'] > df_etf['SMA_26'])
             df_etf = df_etf.rename(columns={'Date': 'date'})
             
-        logger.info(f"📡 Loading Stock Data from Gold: {path_stocks_gold}")
-        df_stocks = spark_session.read.format("delta").load(path_stocks_gold).toPandas()
+        try:
+            logger.info(f"📡 Loading Stock Data from Gold: {path_stocks_gold}")
+            df_stocks = spark_session.read.format("delta").load(path_stocks_gold).toPandas()
+        except Exception as e:
+            logger.warning(f"⚠️ Le chemin {path_stocks_gold} n'existe pas ou est vide. On utilise un DataFrame vide.")
+            df_stocks = pd.DataFrame()
         
         if not df_stocks.empty:
             df_stocks['Date'] = pd.to_datetime(df_stocks['Date']).dt.normalize()
