@@ -40,6 +40,9 @@ class Paths:
     COMMODITIES_LIST_TICKERS = f"{BRONZE}/commodities_list_tickers"
     COMMODITIES_STOCK_PRICES = f"{BRONZE}/commodities_stock_prices"
     COMMODITIES_STOCK_PRICES_WEEKLY = f"{BRONZE}/commodities_stock_prices_weekly"
+
+    LIST_TICKER_2B = f"{BRONZE}/list_ticker_2b"
+    DATA_RAW_2B = f"{BRONZE}/data_raw_2b"
     
 
 
