@@ -14,7 +14,7 @@ os.environ['PYSPARK_PYTHON'] = sys.executable
 os.environ['PYSPARK_DRIVER_PYTHON'] = sys.executable
 
 # Add project root to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
 from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
 from config.config_spark import Paths

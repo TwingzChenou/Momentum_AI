@@ -7,7 +7,7 @@ from pyspark.sql.functions import col
 os.environ['PYSPARK_PYTHON'] = sys.executable
 os.environ['PYSPARK_DRIVER_PYTHON'] = sys.executable
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
 from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
 from config.config_spark import Paths
@@ -81,7 +81,7 @@ def process_bronze_to_silver(spark, bronze_path, silver_path, name_label):
     logger.info(f"📥 Loading Bronze Data: {bronze_path}")
     try:
         df_bronze = spark.read.format("delta").load(bronze_path)
-        if df_bronze.isEmpty():
+        if df_bronze.isEmpty(): # PySpark method to check if DF has rows
             logger.warning(f"⚠️ La table Bronze est vide : {bronze_path}")
             return
             
@@ -100,16 +100,16 @@ def process_bronze_to_silver(spark, bronze_path, silver_path, name_label):
 
 def main():
     setup_logging()
-    logger.info("🚀 Starting Job: Silver Data Quality (ETFs)")
+    logger.info("🚀 Starting Job: Silver Data Quality (2B Universe)")
 
     spark = None
     try:
-        spark = create_spark_session(app_name="Data_Checking_ETF_Silver")
+        spark = create_spark_session(app_name="Data_Checking_2B_Silver")
         
         pipelines = [
-            (Paths.DATA_RAW_ETF, Paths.DATA_RAW_ETF_SILVER, "Journalier ETF"),
-            (Paths.DATA_RAW_ETF_WEEKLY, Paths.DATA_RAW_ETF_WEEKLY_SILVER, "Hebdo ETF"),
-            (Paths.DATA_RAW_ETF_MONTHLY, Paths.DATA_RAW_ETF_MONTHLY_SILVER, "Mensuel ETF")
+            (Paths.DATA_RAW_2B, Paths.DATA_RAW_2B_SILVER, "Journalier 2B"),
+            (Paths.DATA_RAW_2B_WEEKLY, Paths.DATA_RAW_2B_WEEKLY_SILVER, "Hebdo 2B"),
+            (Paths.DATA_RAW_2B_MONTHLY, Paths.DATA_RAW_2B_MONTHLY_SILVER, "Mensuel 2B")
         ]
         
         for bronze, silver, label in pipelines:
