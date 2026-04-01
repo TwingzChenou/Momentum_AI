@@ -1,9 +1,21 @@
+# Base Spark
 pyspark==3.5.3
 delta-spark==3.2.1
-python-dotenv
-pandas
-requests
-loguru
-lxml
 
+# Data Analysis & Finance
+pandas
+numpy
+yfinance
+ta
+plotly
+
+# Web Framework
+streamlit
+
+# Utilities
+python-dotenv
+loguru
+requests
+lxml
 aiohttp
+pyarrow

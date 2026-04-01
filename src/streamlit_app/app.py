@@ -42,7 +42,7 @@ st.markdown("""
     border: 1px solid rgba(0, 242, 254, 0.4);
 }
 .metric-title {
-    font-size: 1.2rem;
+    font-size: 1rem;
     color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 2px;
@@ -50,13 +50,24 @@ st.markdown("""
     margin-bottom: 10px;
 }
 .big-font {
-    font-size: 4rem !important;
+    font-size: 2.5rem;
     font-weight: 900;
     background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     line-height: 1.1;
     margin: 0;
+}
+.main-title {
+    font-size: 4.5rem !important;
+    font-weight: 900;
+    text-align: center;
+    background: linear-gradient(135deg, #ffffff 0%, #a5f3fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-top: 1rem;
+    margin-bottom: 2.5rem;
+    letter-spacing: -1px;
 }
 .big-font.sp500 {
     background: linear-gradient(135deg, #cbd5e1 0%, #64748b 100%);
@@ -88,7 +99,7 @@ def compute_backtest(start_date, leverage):
     )
     
     # Exécution complète de la stratégie
-    df_sp500 = engine.get_sp500_regime()
+    df_sp500 = engine.get_sp500_regime(spark)
     df_etf, df_stocks = engine.load_and_prep_data(spark, Paths.DATA_RAW_ETF_WEEKLY_GOLD, Paths.DATA_RAW_2B_WEEKLY_GOLD)
     
     if df_stocks.empty and df_etf.empty:
@@ -112,8 +123,8 @@ leverage = st.sidebar.slider("Niveau de Levier (x)", min_value=1.0, max_value=3.
 run_button = st.sidebar.button("🚀 Lancer la Simulation", use_container_width=True)
 
 # --- MAIN PAGE CONFIG ---
-st.title("✨ Momentum AI : Tableau de Bord Stratégique")
-st.markdown("Comparatif de la performance du Portefeuille Vectorisé contre le **S&P 500**.")
+st.markdown('<h1 class="main-title">Momentum AI</h1>', unsafe_allow_html=True)
+#st.markdown("Dashboard.")
 
 if run_button or 'perf_df' in st.session_state:
     try:
@@ -130,7 +141,17 @@ if run_button or 'perf_df' in st.session_state:
         # --- CALCUL DES KPIs ---
         # Rendement total
         total_ret_strat = perf_df['Portfolio_Equity'].iloc[-1] - 100.0
-        total_ret_sp500 = perf_df['SP500_Equity'].iloc[-1] - 100.0
+        
+        # CAGR (Compound Annual Growth Rate)
+        n_days = (perf_df.index[-1] - perf_df.index[0]).days
+        n_years = max(n_days / 365.25, 0.1) # Sécurité division par zéro
+        cagr = ((perf_df['Portfolio_Equity'].iloc[-1] / 100.0) ** (1.0 / n_years)) - 1.0
+        
+        # Sharpe Ratio (Annuélisé)
+        # On assume un taux sans risque de 0% pour le calcul rapide
+        weekly_returns = perf_df['Portfolio_Return']
+        vol_ann = weekly_returns.std() * np.sqrt(52)
+        sharpe = (weekly_returns.mean() * 52) / vol_ann if vol_ann > 0 else 0
         
         # Max Drawdown
         roll_max = perf_df['Portfolio_Equity'].cummax()
@@ -138,12 +159,12 @@ if run_button or 'perf_df' in st.session_state:
         max_drawdown = drawdown.min() * 100.0
         
         # --- DISPLAY KPIs (GROS NOMBRES) ---
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-title">Performance AI ({leverage}x)</div>
+                <div class="metric-title">Total Return</div>
                 <div class="big-font\">{total_ret_strat:+.1f}%</div>
             </div>
             """, unsafe_allow_html=True)
@@ -151,15 +172,23 @@ if run_button or 'perf_df' in st.session_state:
         with col2:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-title">Performance S&P 500</div>
-                <div class="big-font sp500">{total_ret_sp500:+.1f}%</div>
+                <div class="metric-title">CAGR (Annuel)</div>
+                <div class="big-font\">{cagr*100:.1f}%</div>
             </div>
             """, unsafe_allow_html=True)
             
         with col3:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-title">Max Drawdown Stratégie</div>
+                <div class="metric-title">Ratio de Sharpe</div>
+                <div class="big-font sp500">{sharpe:.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col4:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-title">Max Drawdown</div>
                 <div class="big-font drawdown">{max_drawdown:.1f}%</div>
             </div>
             """, unsafe_allow_html=True)

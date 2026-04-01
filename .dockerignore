@@ -1,0 +1,15 @@
+.git
+**/__pycache__
+.env
+data/
+gs_cache/
+mlruns/
+catboost_info/
+notebooks/
+keys/
+config/keys_gcp/
+*.ipynb
+*.log
+*.parquet
+*.delta
+*.csv

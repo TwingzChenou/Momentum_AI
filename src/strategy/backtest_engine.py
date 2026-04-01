@@ -8,6 +8,10 @@ import warnings
 from datetime import datetime
 from loguru import logger
 
+# Project imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+from config.config_spark import Paths
+
 warnings.filterwarnings('ignore')
 
 class RegimeSwitchingMomentumBacktester:
@@ -21,29 +25,49 @@ class RegimeSwitchingMomentumBacktester:
         self.margin_rate_annual = 0.06
         self.trading_fee_rate = 0.001
 
-    def get_sp500_regime(self) -> pd.DataFrame:
-        logger.info("📈 Fetching S&P 500 data for Regime Filter...")
-        sp500 = yf.download('^GSPC', start=self.start_date, end=self.end_date, progress=False)
-        sp500 = pd.DataFrame(sp500['Close'].resample('W-FRI').last())
-        sp500.columns = ['Close']
+    def get_sp500_regime(self, spark_session) -> pd.DataFrame:
+        logger.info(f"📈 Loading S&P 500 data from Silver Lake: {Paths.DATA_RAW_SP500_WEEKLY_SILVER}")
+        try:
+            sp500 = spark_session.read.format("delta").load(Paths.DATA_RAW_SP500_WEEKLY_SILVER).toPandas()
+        except Exception as e:
+            logger.error(f"🚨 Impossible de charger le SP500 depuis le Lake: {e}")
+            return pd.DataFrame()
+            
+        if sp500.empty:
+            logger.error("🚨 La table SP500 Silver est vide.")
+            return pd.DataFrame()
+            
+        sp500 = sp500.rename(columns={'Date': 'date'}).set_index('date')
+        sp500 = sp500.sort_index()
+        sp500.index = pd.to_datetime(sp500.index)
         
-        sp500['SMA_12'] = ta.trend.sma_indicator(sp500['Close'], window=26)
-        sp500['SMA_26'] = ta.trend.sma_indicator(sp500['Close'], window=50)
+        # Filtre sur les dates demandées
+        sp500 = sp500.loc[self.start_date:self.end_date]
         
-        cond_bull = ((sp500['SMA_12'] > sp500['SMA_26']) & (sp500['Close'] > sp500['SMA_26'])) | \
-                    ((sp500['SMA_12'] < sp500['SMA_26']) & (sp500['Close'] > sp500['SMA_12']))
+        if sp500.empty:
+            logger.warning(f"⚠️ Aucune donnée SP500 entre {self.start_date} et {self.end_date}")
+            return pd.DataFrame()
+            
+        # On ne garde que la colonne Close pour le calcul du régime
+        sp500 = sp500[['Close']]
+        
+        sp500['SMA_26'] = ta.trend.sma_indicator(sp500['Close'], window=26)
+        sp500['SMA_50'] = ta.trend.sma_indicator(sp500['Close'], window=50)
+        
+        cond_bull = ((sp500['SMA_26'] > sp500['SMA_50']) & (sp500['Close'] > sp500['SMA_50'])) | \
+                    ((sp500['SMA_26'] < sp500['SMA_50']) & (sp500['Close'] > sp500['SMA_26']))
                     
         sp500['Regime'] = np.where(cond_bull, 'Bull', 'Bear')
         sp500.index = pd.to_datetime(sp500.index).tz_localize(None).normalize()
         
-        return sp500[['Close', 'SMA_12', 'SMA_26', 'Regime']]
+        return sp500[['Close', 'SMA_26', 'SMA_50', 'Regime']]
 
     def load_and_prep_data(self, spark_session, path_etf_gold, path_stocks_gold):
         try:
             logger.info(f"📡 Loading ETF Data from Gold: {path_etf_gold}")
             df_etf = spark_session.read.format("delta").load(path_etf_gold).toPandas()
         except Exception as e:
-            logger.warning(f"⚠️ Le chemin {path_etf_gold} n'existe pas ou est vide. On utilise un DataFrame vide.")
+            logger.warning(f"⚠️ Erreur lors du chargement de {path_etf_gold}: {e}")
             df_etf = pd.DataFrame()
             
         if not df_etf.empty:
@@ -56,7 +80,7 @@ class RegimeSwitchingMomentumBacktester:
             logger.info(f"📡 Loading Stock Data from Gold: {path_stocks_gold}")
             df_stocks = spark_session.read.format("delta").load(path_stocks_gold).toPandas()
         except Exception as e:
-            logger.warning(f"⚠️ Le chemin {path_stocks_gold} n'existe pas ou est vide. On utilise un DataFrame vide.")
+            logger.warning(f"⚠️ Erreur lors du chargement de {path_stocks_gold}: {e}")
             df_stocks = pd.DataFrame()
         
         if not df_stocks.empty:
@@ -73,7 +97,7 @@ class RegimeSwitchingMomentumBacktester:
         return df_etf, df_stocks
 
     def simulate_portfolio(self, sp500, etfs, stocks) -> pd.DataFrame:
-        logger.info(f"⚙️ Lancement de la Simulation Vectorisée (Levier {self.leverage}x)...")
+        logger.info(f"⚙️ Lancement de la Simulation Vectorisée (Levier {self.leverage}x + Top 2 ETFs en Bear)...")
         
         dates = sp500.index
         if not etfs.empty: dates = dates.intersection(etfs['date'].unique())
@@ -158,26 +182,30 @@ class RegimeSwitchingMomentumBacktester:
                             dynamic_weight = self.leverage / n_assets
                             for pos in current_portfolio: pos['Weight'] = dynamic_weight
                         
-                # 🔴 REGIME BEAR : Refuge (Safe Haven) sur The Top ETF
+                # 🔴 REGIME BEAR : Répartition sur les 2 meilleurs ETFs (50/50)
                 elif regime == 'Bear' and not etfs.empty:
                     current_portfolio = [p for p in current_portfolio if p['Type'] == 'ETF']
-                    daily_etfs = etfs[etfs['date'] == d].copy()
+                    current_tickers = [p['Ticker'] for p in current_portfolio]
                     
-                    if not daily_etfs.empty:
+                    # On cherche à avoir 2 ETFs maximum
+                    places_libres = 2 - len(current_portfolio)
+                    
+                    if places_libres > 0:
+                        daily_etfs = etfs[etfs['date'] == d].copy()
+                        daily_etfs = daily_etfs[~daily_etfs['Ticker'].isin(current_tickers)]
                         eligible_etfs = daily_etfs[daily_etfs['Eligible']]
-                        if not eligible_etfs.empty:
-                            best_etf = eligible_etfs.nlargest(1, 'Momentum_3M').iloc[0]
-                            best_ticker = best_etf['Ticker']
-                            current_tickers = [p['Ticker'] for p in current_portfolio]
+                        
+                        # Sélection des nouveaux ETFs pour combler le vide
+                        top_new = eligible_etfs.nlargest(places_libres, 'Momentum_3M')
+                        for _, row in top_new.iterrows():
+                            current_portfolio.append({'Ticker': row['Ticker'], 'Weight': 0.5, 'Type': 'ETF'})
+                            trades_count += 1
                             
-                            if best_ticker not in current_tickers:
-                                current_portfolio = [{'Ticker': best_ticker, 'Weight': 1.0, 'Type': 'ETF'}]
-                                trades_count += 1
-                        else:
-                            current_portfolio = [] # Cash Fallback
-                            
-                    if len(current_portfolio) > 0:
-                        for pos in current_portfolio: pos['Weight'] = 1.0
+                    # ⚖️ Ajustement dynamique (ex: 1.0 / 2 = 50% chacun, SANS LEVIER)
+                    n_assets = len(current_portfolio)
+                    if n_assets > 0:
+                        dynamic_weight = 1.0 / n_assets
+                        for pos in current_portfolio: pos['Weight'] = dynamic_weight
             
             # --- 3. ENREGISTREMENT ---
             current_target = {pos['Ticker']: pos['Weight'] for pos in current_portfolio}
@@ -189,6 +217,10 @@ class RegimeSwitchingMomentumBacktester:
     def generate_performance(self, allocations_df, etfs, stocks, sp500):
         logger.info("🧪 Calcul de l'Equity Curve et du rendement du Portefeuille vs SP500...")
         
+        if allocations_df.empty or sp500.empty:
+            logger.warning("⚠️ Impossible de générer les performances : Allocations ou S&P500 vides.")
+            return pd.DataFrame()
+            
         prices_etf = etfs.pivot(index='date', columns='Ticker', values='Close') if not etfs.empty else pd.DataFrame()
         prices_stocks = stocks.pivot(index='date', columns='Ticker', values='adjClose') if not stocks.empty else pd.DataFrame()
         all_prices = pd.concat([prices_etf, prices_stocks], axis=1)
@@ -231,7 +263,8 @@ class RegimeSwitchingMomentumBacktester:
         })
         
         # Le premier jour de la courbe doit démarrer propre à 100
-        perf_df.iloc[0, perf_df.columns.get_loc('Portfolio_Equity')] = 100.0
-        perf_df.iloc[0, perf_df.columns.get_loc('SP500_Equity')] = 100.0
+        if not perf_df.empty:
+            perf_df.iloc[0, perf_df.columns.get_loc('Portfolio_Equity')] = 100.0
+            perf_df.iloc[0, perf_df.columns.get_loc('SP500_Equity')] = 100.0
         
         return perf_df

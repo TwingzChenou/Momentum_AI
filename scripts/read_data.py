@@ -17,8 +17,8 @@ from config.config_spark import Paths
 
 def read_sp500_history(spark):
     """Reads the S&P 500 history from Delta Lake."""
-    logger.info(f"Reading S&P 500 history from {Paths.SP500_STOCK_PRICES}...")
-    df = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES)
+    logger.info(f"Reading S&P 500 history from {Paths.DATA_RAW_SP500_WEEKLY_SILVER}...")
+    df = spark.read.format("delta").load(Paths.DATA_RAW_SP500_WEEKLY_SILVER)
     logger.info(f"Found {df.count()} records in S&P 500 history.")
     logger.info(f"Columns: {df.columns}")
     logger.info(f"Schema: {df.schema}")
@@ -39,8 +39,8 @@ def main():
 
     print(df.head(10))
     print(df.describe())
-    print(df.sort_values(by="date", ascending=False).head(5))
-    print(df.sort_values(by="date", ascending=True).head(5))
+    print(df.sort_values(by="Date", ascending=False).head(5))
+    print(df.sort_values(by="Date", ascending=True).head(5))
     #print(df['symbol'].unique())
 
     logger.info("Stopping Spark session...")

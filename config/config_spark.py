@@ -8,7 +8,11 @@ load_dotenv()
 # 2. Fetch the basics
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 FMP_API_KEY = os.getenv("FMP_API_KEY")
-GCP_KEY_PATH = os.getenv("GCP_KEY_PATH", "./keys/gcs-key.json") # Default value if missing
+GCP_KEY_PATH = os.getenv("GCP_KEY_PATH", "./keys/gcs-key.json")
+# Convert to absolute path to avoid CWD issues in different environments (Docker/Local)
+if GCP_KEY_PATH and not os.path.isabs(GCP_KEY_PATH):
+    GCP_KEY_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", GCP_KEY_PATH))
+
 
 # 3. Construct the Derived Paths (The "f-string" part)
 # This logic belongs here, in Python!
@@ -48,6 +52,9 @@ class Paths:
     DATA_RAW_ETF = f"{BRONZE}/data_raw_etf"
     DATA_RAW_ETF_WEEKLY = f"{BRONZE}/data_raw_etf_weekly"
     DATA_RAW_ETF_MONTHLY = f"{BRONZE}/data_raw_etf_monthly"
+    DATA_RAW_SP500 = f"{BRONZE}/data_raw_sp500"
+    DATA_RAW_SP500_WEEKLY = f"{BRONZE}/data_raw_sp500_weekly"
+    DATA_RAW_SP500_MONTHLY = f"{BRONZE}/data_raw_sp500_monthly"
     
 
 
@@ -73,6 +80,9 @@ class Paths:
     DATA_RAW_ETF_SILVER = f"{SILVER}/data_raw_etf"
     DATA_RAW_ETF_WEEKLY_SILVER = f"{SILVER}/data_raw_etf_weekly"
     DATA_RAW_ETF_MONTHLY_SILVER = f"{SILVER}/data_raw_etf_monthly"
+    DATA_RAW_SP500_SILVER = f"{SILVER}/data_raw_sp500"
+    DATA_RAW_SP500_WEEKLY_SILVER = f"{SILVER}/data_raw_sp500_weekly"
+    DATA_RAW_SP500_MONTHLY_SILVER = f"{SILVER}/data_raw_sp500_monthly"
     
     # Specific Tables GOLD
     SP500_STOCK_PRICES_GOLD = f"{GOLD}/sp500_stock_prices"
