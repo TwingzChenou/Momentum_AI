@@ -6,8 +6,12 @@ from dotenv import load_dotenv
 load_dotenv() 
 
 # 2. Fetch the basics
-BUCKET_NAME = os.getenv("BUCKET_NAME")
 FMP_API_KEY = os.getenv("FMP_API_KEY")
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "finance-ml-project-486410")
+BUCKET_NAME = os.getenv("BUCKET_NAME", "finance-data-lake-unique-id")
+BQ_DATASET = os.getenv("BQ_DATASET", "Dataset_Strategy_Momentum")
+BQ_TEMP_BUCKET = BUCKET_NAME
+
 GCP_KEY_PATH = os.getenv("GCP_KEY_PATH", "./keys/gcs-key.json")
 # Convert to absolute path to avoid CWD issues in different environments (Docker/Local)
 if GCP_KEY_PATH and not os.path.isabs(GCP_KEY_PATH):
@@ -99,6 +103,10 @@ class Paths:
     SP500_MOMENTUM_VALUE_PROFITABLE_GROWTH_CRASH_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_value_profitable_growth_crash_weekly"
     SP500_MOMENTUM_VALUE_PROFITABLE_GROWTH_SURPRISE_CRASH_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_value_profitable_growth_surprise_crash_weekly"
     
+    # --- BIGQUERY TABLES ---
+    BQ_ETF_GOLD = f"{GCP_PROJECT_ID}.{BQ_DATASET}.etf_gold"
+    BQ_STOCKS_GOLD = f"{GCP_PROJECT_ID}.{BQ_DATASET}.stocks_gold"
+    BQ_SP500_GOLD = f"{GCP_PROJECT_ID}.{BQ_DATASET}.sp500_gold"
 
 
 # 4. Verification (Optional but recommended)

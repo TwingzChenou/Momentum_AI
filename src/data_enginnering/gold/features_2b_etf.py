@@ -17,7 +17,7 @@ os.environ['PYSPARK_DRIVER_PYTHON'] = sys.executable
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
-from config.config_spark import Paths
+from config.config_spark import Paths, BQ_TEMP_BUCKET, GCP_PROJECT_ID, GCP_KEY_PATH
 
 # --- ETF PIPELINE ---
 etf_schema = StructType([
@@ -49,7 +49,8 @@ def process_etf_features(df: pd.DataFrame) -> pd.DataFrame:
     
     df['Close'] = df[price_col]
     
-    return df[[f.name for f in etf_schema.fields]]
+    # On supprime les lignes avec des valeurs nulles (période de chauffe des indicateurs)
+    return df[[f.name for f in etf_schema.fields]].dropna()
 
 # --- STOCKS PIPELINE ---
 stock_schema = StructType([
@@ -117,13 +118,27 @@ def process_stock_features(df: pd.DataFrame) -> pd.DataFrame:
         
     result_df = weekly_df[[f.name for f in stock_schema.fields]].copy()
     
-    return result_df
+    # On supprime les lignes avec des valeurs nulles (période de chauffe des indicateurs)
+    return result_df.dropna()
 
 
 def save_to_delta(df, target_path, table_name=""):
     logger.info(f"💾 Sauvegarde Delta de {table_name} vers {target_path}")
-    df.write.format("delta").mode("overwrite").option("mergeSchema", "true").save(target_path)
-    logger.success(f"✅ Enregistré dans {target_path}. (Prêt pour import BigQuery)")
+    # On utilise overwriteSchema pour éviter les erreurs de partitionnement/colonnes si la table existe déjà
+    df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").save(target_path)
+    logger.success(f"✅ Enregistré dans {target_path}.")
+
+def save_to_bigquery(df, bq_table, table_name=""):
+    logger.info(f"💾 Sauvegarde BigQuery de {table_name} vers {bq_table}")
+    # On force le format Spark BigQuery avec le bucket temporaire, le parentProject et les credentials
+    df.write.format("bigquery") \
+        .option("table", bq_table) \
+        .option("temporaryGcsBucket", BQ_TEMP_BUCKET) \
+        .option("parentProject", GCP_PROJECT_ID) \
+        .option("credentialsFile", GCP_KEY_PATH) \
+        .mode("overwrite") \
+        .save()
+    logger.success(f"✅ Enregistré dans BigQuery: {bq_table}")
 
 def main():
     setup_logging()
@@ -140,13 +155,37 @@ def main():
             if not df_etf_silver.isEmpty():
                 df_etf_gold = df_etf_silver.groupby("Ticker").applyInPandas(process_etf_features, schema=etf_schema)
                 df_etf_gold = df_etf_gold.withColumn("Date", col("Date").cast("date"))
-                save_to_delta(df_etf_gold, Paths.DATA_RAW_ETF_WEEKLY_GOLD, "ETFs Gold (Weekly)")
+                
+                # Sauvegarde BigQuery (Destination Finale)
+                save_to_bigquery(df_etf_gold, Paths.BQ_ETF_GOLD, "ETFs Gold (Weekly)")
+                # On garde aussi la copie Delta par précaution si besoin
+                save_to_delta(df_etf_gold, Paths.DATA_RAW_ETF_WEEKLY_GOLD, "ETFs Gold (Delta Cache)")
             else:
                 logger.warning("⚠️ Table ETF Weekly Silver est vide, passe...")
         except Exception as e:
             logger.warning(f"⚠️ Impossible de traiter les ETFs : {e}")
         
-        # --- 2. PROCESS STOCKS ---
+        # --- 2. PROCESS SP500 INDEX ---
+        logger.info(f"📥 Loading SP500 Weekly from {Paths.DATA_RAW_SP500_WEEKLY_SILVER}")
+        try:
+            df_sp500_silver = spark.read.format("delta").load(Paths.DATA_RAW_SP500_WEEKLY_SILVER)
+            if not df_sp500_silver.isEmpty():
+                # On utilise la même logique que les ETFs pour l'indice de référence
+                df_sp500_gold = df_sp500_silver.groupby("Ticker").applyInPandas(process_etf_features, schema=etf_schema)
+                
+                # Conversion du type Date (on s'assure que le nom reste "Date" avec un D majuscule)
+                df_sp500_gold = df_sp500_gold.withColumn("Date", col("Date").cast("date"))
+                
+                # Sauvegarde BigQuery
+                save_to_bigquery(df_sp500_gold, Paths.BQ_SP500_GOLD, "SP500 Gold (Weekly)")
+                # Sauvegarde Delta pour le cache interne
+                save_to_delta(df_sp500_gold, Paths.SP500_STOCK_PRICES_WEEKLY_GOLD, "SP500 Gold (Delta Cache)")
+            else:
+                logger.warning("⚠️ Table SP500 Weekly Silver est vide, passe...")
+        except Exception as e:
+            logger.warning(f"⚠️ Impossible de traiter le SP500 : {e}")
+        
+        # --- 3. PROCESS STOCKS ---
         logger.info(f"📥 Loading Stocks Daily from {Paths.DATA_RAW_2B_SILVER}")
         try:
             df_stock_silver = spark.read.format("delta").load(Paths.DATA_RAW_2B_SILVER)
@@ -161,7 +200,11 @@ def main():
                 
                 df_stock_gold = df_stock_clean.groupBy("Ticker").applyInPandas(process_stock_features, schema=stock_schema)
                 df_stock_gold = df_stock_gold.withColumn("Date", col("Date").cast("date"))
-                save_to_delta(df_stock_gold, Paths.DATA_RAW_2B_WEEKLY_GOLD, "Stocks Gold (Weekly Aggregated)")
+                
+                # Sauvegarde BigQuery (Destination Finale)
+                save_to_bigquery(df_stock_gold, Paths.BQ_STOCKS_GOLD, "Stocks Gold (Weekly Aggregated)")
+                # On garde aussi la copie Delta par précaution
+                save_to_delta(df_stock_gold, Paths.DATA_RAW_2B_WEEKLY_GOLD, "Stocks Gold (Delta Cache)")
             else:
                 logger.warning("⚠️ Table Stocks Daily Silver est vide, passe...")
         except Exception as e:

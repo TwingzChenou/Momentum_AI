@@ -100,7 +100,7 @@ def compute_backtest(start_date, leverage):
     
     # Exécution complète de la stratégie
     df_sp500 = engine.get_sp500_regime(spark)
-    df_etf, df_stocks = engine.load_and_prep_data(spark, Paths.DATA_RAW_ETF_WEEKLY_GOLD, Paths.DATA_RAW_2B_WEEKLY_GOLD)
+    df_etf, df_stocks = engine.load_and_prep_data(spark, Paths.BQ_ETF_GOLD, Paths.BQ_STOCKS_GOLD)
     
     if df_stocks.empty and df_etf.empty:
         return pd.DataFrame(), pd.DataFrame()
@@ -113,11 +113,49 @@ def compute_backtest(start_date, leverage):
 # --- SIDEBAR CONFIG ---
 st.sidebar.title("⚙️ Paramètres de Backtest")
 
-default_start = datetime.date(2010, 1, 1)
+# Dates limites
 min_date = datetime.date(2000, 1, 1)
 max_date = datetime.date.today()
+default_start = datetime.date(2010, 1, 1)
 
-start_date = st.sidebar.date_input("Date de début", value=default_start, min_value=min_date, max_value=max_date)
+# Gestion de la session state pour la date
+if 'start_date_input' not in st.session_state:
+    st.session_state.start_date_input = default_start
+
+def set_start_date(period_days):
+    if period_days == "since":
+        st.session_state.start_date_input = min_date
+    else:
+        st.session_state.start_date_input = datetime.date.today() - datetime.timedelta(days=period_days)
+    st.rerun()
+
+st.sidebar.markdown("### 🕒 Quick Select")
+# Ligne 1: 1M, 3M, 6M
+c1, c2, c3 = st.sidebar.columns(3)
+if c1.button("1M", use_container_width=True): set_start_date(30)
+if c2.button("3M", use_container_width=True): set_start_date(90)
+if c3.button("6M", use_container_width=True): set_start_date(180)
+
+# Ligne 2: 1Y, 5Y, 10Y
+c4, c5, c6 = st.sidebar.columns(3)
+if c4.button("1Y", use_container_width=True): set_start_date(365)
+if c5.button("5Y", use_container_width=True): set_start_date(1825)
+if c6.button("10Y", use_container_width=True): set_start_date(3650)
+
+# Ligne 3: Since Everything
+if st.sidebar.button("Since 2000 (Max)", use_container_width=True): set_start_date("since")
+
+st.sidebar.write("---")
+
+# Affichage du widget avec synchronisation automatique via 'key'
+start_date = st.sidebar.date_input(
+    "Date de début", 
+    value=st.session_state.start_date_input, 
+    min_value=min_date, 
+    max_value=max_date, 
+    key="start_date_input"
+)
+
 leverage = st.sidebar.slider("Niveau de Levier (x)", min_value=1.0, max_value=3.0, value=1.5, step=0.1)
 
 run_button = st.sidebar.button("🚀 Lancer la Simulation", use_container_width=True)

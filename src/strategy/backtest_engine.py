@@ -26,17 +26,21 @@ class RegimeSwitchingMomentumBacktester:
         self.trading_fee_rate = 0.001
 
     def get_sp500_regime(self, spark_session) -> pd.DataFrame:
-        logger.info(f"📈 Loading S&P 500 data from Silver Lake: {Paths.DATA_RAW_SP500_WEEKLY_SILVER}")
+        logger.info(f"📈 Loading S&P 500 data from BigQuery: {Paths.BQ_SP500_GOLD}")
         try:
-            sp500 = spark_session.read.format("delta").load(Paths.DATA_RAW_SP500_WEEKLY_SILVER).toPandas()
+            # On lit directement depuis BigQuery
+            sp500 = spark_session.read.format("bigquery") \
+                .option("table", Paths.BQ_SP500_GOLD) \
+                .load().toPandas()
         except Exception as e:
-            logger.error(f"🚨 Impossible de charger le SP500 depuis le Lake: {e}")
+            logger.error(f"🚨 Impossible de charger le SP500 depuis BigQuery: {e}")
             return pd.DataFrame()
             
         if sp500.empty:
-            logger.error("🚨 La table SP500 Silver est vide.")
+            logger.error("🚨 La table SP500 Gold BigQuery est vide.")
             return pd.DataFrame()
             
+        # Harmonisation Date et Index
         sp500 = sp500.rename(columns={'Date': 'date'}).set_index('date')
         sp500 = sp500.sort_index()
         sp500.index = pd.to_datetime(sp500.index)
@@ -48,11 +52,11 @@ class RegimeSwitchingMomentumBacktester:
             logger.warning(f"⚠️ Aucune donnée SP500 entre {self.start_date} et {self.end_date}")
             return pd.DataFrame()
             
-        # On ne garde que la colonne Close pour le calcul du régime
-        sp500 = sp500[['Close']]
-        
-        sp500['SMA_26'] = ta.trend.sma_indicator(sp500['Close'], window=26)
-        sp500['SMA_50'] = ta.trend.sma_indicator(sp500['Close'], window=50)
+        # Si les SMA sont déjà là (Gold), on gagne du temps
+        if 'SMA_26' not in sp500.columns or 'SMA_50' not in sp500.columns:
+            logger.info("⚡ Recalcul des SMAs pour le régime SP500 (Colonnes manquantes dans BQ)")
+            sp500['SMA_26'] = ta.trend.sma_indicator(sp500['Close'], window=26)
+            sp500['SMA_50'] = ta.trend.sma_indicator(sp500['Close'], window=50)
         
         cond_bull = ((sp500['SMA_26'] > sp500['SMA_50']) & (sp500['Close'] > sp500['SMA_50'])) | \
                     ((sp500['SMA_26'] < sp500['SMA_50']) & (sp500['Close'] > sp500['SMA_26']))
@@ -62,12 +66,12 @@ class RegimeSwitchingMomentumBacktester:
         
         return sp500[['Close', 'SMA_26', 'SMA_50', 'Regime']]
 
-    def load_and_prep_data(self, spark_session, path_etf_gold, path_stocks_gold):
+    def load_and_prep_data(self, spark_session, bq_etf_table, bq_stocks_table):
         try:
-            logger.info(f"📡 Loading ETF Data from Gold: {path_etf_gold}")
-            df_etf = spark_session.read.format("delta").load(path_etf_gold).toPandas()
+            logger.info(f"📡 Loading ETF Data from BigQuery: {bq_etf_table}")
+            df_etf = spark_session.read.format("bigquery").option("table", bq_etf_table).load().toPandas()
         except Exception as e:
-            logger.warning(f"⚠️ Erreur lors du chargement de {path_etf_gold}: {e}")
+            logger.warning(f"⚠️ Erreur lors du chargement de {bq_etf_table} depuis BigQuery: {e}")
             df_etf = pd.DataFrame()
             
         if not df_etf.empty:
@@ -77,10 +81,10 @@ class RegimeSwitchingMomentumBacktester:
             df_etf = df_etf.rename(columns={'Date': 'date'})
             
         try:
-            logger.info(f"📡 Loading Stock Data from Gold: {path_stocks_gold}")
-            df_stocks = spark_session.read.format("delta").load(path_stocks_gold).toPandas()
+            logger.info(f"📡 Loading Stock Data from BigQuery: {bq_stocks_table}")
+            df_stocks = spark_session.read.format("bigquery").option("table", bq_stocks_table).load().toPandas()
         except Exception as e:
-            logger.warning(f"⚠️ Erreur lors du chargement de {path_stocks_gold}: {e}")
+            logger.warning(f"⚠️ Erreur lors du chargement de {bq_stocks_table} depuis BigQuery: {e}")
             df_stocks = pd.DataFrame()
         
         if not df_stocks.empty:
