@@ -19,6 +19,22 @@ from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
 from config.config_spark import Paths
 
+def get_max_date_from_lake(spark, path):
+    """
+    Checks the last available date in the Delta table for incremental loading.
+    Returns (max_date_str, is_incremental)
+    """
+    try:
+        df = spark.read.format("delta").load(path)
+        max_date = df.selectExpr("max(Date)").collect()[0][0]
+        if max_date:
+            logger.info(f"📍 Last data in Lake: {max_date}")
+            return str(max_date), True
+    except Exception:
+        logger.warning(f"⚠️ No existing table found at {path}. Full load required.")
+        
+    return None, False
+
 def get_tickers_from_lake(spark):
     """
     Reads the tickers list from LIST_TICKER_2B and returns a python list of symbols.
@@ -33,57 +49,64 @@ def get_tickers_from_lake(spark):
         logger.error(f"❌ Error loading tickers: {e}")
         return []
 
-def fetch_data_in_chunks(tickers, period="2y", chunk_size=100):
+def fetch_data_in_chunks(tickers, start_date=None, period="2y", chunk_size=100):
     """
-    Fetches daily data from yfinance in chunks to avoid rate limits,
-    then stacks it into a flat structure.
+    Fetches daily data from yfinance in chunks.
+    If start_date is provided, uses start/end instead of period.
     """
-    logger.info(f"🚀 Fetching data for {len(tickers)} tickers in chunks of {chunk_size}...")
+    logger.info(f"🚀 Fetching data for {len(tickers)} tickers (Start: {start_date if start_date else period})")
     
     all_data = []
     
+    # Calculate end as today
+    end_date = datetime.today().strftime('%Y-%m-%d')
+    
     for i in range(0, len(tickers), chunk_size):
         chunk = tickers[i:i + chunk_size]
-        logger.info(f"⏱️ Fetching chunk {i // chunk_size + 1}/{(len(tickers) - 1) // chunk_size + 1} ({len(chunk)} tickers)...")
+        logger.info(f"⏱️ Fetching chunk {i // chunk_size + 1}/{(len(tickers) - 1) // chunk_size + 1}...")
         
         try:
-            # group_by='ticker' ensures Level 0 is Ticker, Level 1 is Price
-            df = yf.download(
-                tickers=chunk, 
-                period=period, 
-                interval="1d", 
-                group_by="ticker", 
-                auto_adjust=False, 
-                progress=False,
-                threads=True
-            )
+            if start_date:
+                df = yf.download(
+                    tickers=chunk, 
+                    start=start_date,
+                    end=end_date,
+                    interval="1d", 
+                    group_by="ticker", 
+                    auto_adjust=False, 
+                    progress=False,
+                    threads=True
+                )
+            else:
+                df = yf.download(
+                    tickers=chunk, 
+                    period=period, 
+                    interval="1d", 
+                    group_by="ticker", 
+                    auto_adjust=False, 
+                    progress=False,
+                    threads=True
+                )
             
             if df.empty:
-                logger.warning("⚠️ Empty DataFrame returned for this chunk.")
                 continue
                 
-            # If only 1 ticker in chunk, yfinance doesn't use MultiIndex on columns
             if len(chunk) == 1:
                 df['Ticker'] = chunk[0]
                 df = df.reset_index()
             else:
-                # Stack the Ticker level (level=0)
                 df = df.stack(level=0, future_stack=True).rename_axis(['Date', 'Ticker']).reset_index()
                 
             all_data.append(df)
-            
-            # Sleep to prevent rapid rate limiting
-            time.sleep(2)
+            time.sleep(1)
             
         except Exception as e:
-            logger.error(f"❌ Error fetching chunk {chunk}: {e}")
+            logger.error(f"❌ Error fetching chunk: {e}")
             
     if not all_data:
         return pd.DataFrame()
         
     final_df = pd.concat(all_data, ignore_index=True)
-    
-    # Ensure columns exist even if some are missing
     expected_cols = ['Date', 'Ticker', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
     for col_name in expected_cols:
         if col_name not in final_df.columns:
@@ -184,12 +207,22 @@ def save_to_lake(spark, pandas_df, path):
                  .withColumn("AdjClose", col("AdjClose").cast(DoubleType())) \
                  .withColumn("Volume", col("Volume").cast(LongType()))
                  
-        sdf.write.format("delta") \
-            .mode("overwrite") \
-            .option("mergeSchema", "true") \
-            .save(path)
+        # --- DELTA MERGE FOR DATA PRESERVATION ---
+        if DeltaTable.isDeltaTable(spark, path):
+            logger.info("🔄 Merging into existing Delta table...")
+            from delta.tables import DeltaTable
+            dt = DeltaTable.forPath(spark, path)
+            dt.alias("target").merge(
+                sdf.alias("source"),
+                "target.Date = source.Date AND target.Ticker = source.Ticker"
+            ).whenMatchedUpdateAll() \
+             .whenNotMatchedInsertAll() \
+             .execute()
+        else:
+            logger.info("🆕 Creating new Delta table...")
+            sdf.write.format("delta").mode("overwrite").save(path)
             
-        logger.info(f"✅ Success! Data saved to Delta Lake at {path}.")
+        logger.info(f"✅ Success! Data saved to {path}.")
         
     except Exception as e:
         logger.error(f"❌ Error saving raw data to Lake: {e}")
@@ -202,25 +235,27 @@ def main():
 
     try:
         spark = create_spark_session(app_name="Data_Raw_2B_Ingestion")
+        from delta.tables import DeltaTable # Ensure import for logic
         
         # 1. Get Tickers
         tickers = get_tickers_from_lake(spark)
-        
         if not tickers:
-            logger.warning("⚠️ No tickers found. Exiting.")
             return
             
-        # 2. Fetch Data in Chunks
-        df_daily = fetch_data_in_chunks(tickers, period="2y", chunk_size=100)
+        # 2. Check High Water Mark
+        last_date, is_inc = get_max_date_from_lake(spark, Paths.DATA_RAW_2B)
+        
+        # 3. Fetch Data (Incremental if possible)
+        df_daily = fetch_data_in_chunks(tickers, start_date=last_date, period="2y", chunk_size=100)
         
         if df_daily.empty:
-            logger.error("❌ No data retrieved from yfinance.")
+            logger.info("💤 No new data to process.")
             return
 
-        # 3. Process and Align
+        # 4. Process (Master Index generation for the fetched window)
         df_daily_master, df_weekly_master, df_monthly_master = process_data(df_daily, tickers)
         
-        # 4. Save to Delta
+        # 5. Save/Merge to Lake
         save_to_lake(spark, df_daily_master, Paths.DATA_RAW_2B)
         save_to_lake(spark, df_weekly_master, Paths.DATA_RAW_2B_WEEKLY)
         save_to_lake(spark, df_monthly_master, Paths.DATA_RAW_2B_MONTHLY)

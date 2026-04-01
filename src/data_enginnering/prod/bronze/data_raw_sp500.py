@@ -17,33 +17,56 @@ from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
 from config.config_spark import Paths
 
-def fetch_sp500_max():
+def get_max_date_from_lake(spark, path):
     """
-    Télécharge l'historique MAX du S&P 500 (^GSPC).
+    Checks the last available date in the Delta table for incremental loading.
+    Returns (max_date_str, is_incremental)
+    """
+    try:
+        df = spark.read.format("delta").load(path)
+        max_date = df.selectExpr("max(Date)").collect()[0][0]
+        if max_date:
+            logger.info(f"📍 Last data in Lake for SP500: {max_date}")
+            return str(max_date), True
+    except Exception:
+        logger.warning(f"⚠️ No existing table found at {path}. Full load required.")
+        
+    return None, False
+
+def fetch_sp500(start_date=None, period="max"):
+    """
+    Télécharge l'historique du S&P 500 (^GSPC).
+    Si start_date est fourni, télécharge depuis cette date.
     """
     ticker = "^GSPC"
-    logger.info(f"🚀 Téléchargement de l'historique MAX pour {ticker}...")
+    logger.info(f"🚀 Téléchargement pour {ticker} (Start: {start_date if start_date else period})...")
     
     try:
-        df = yf.download(
-            tickers=ticker, 
-            period="max", 
-            interval="1d", 
-            auto_adjust=False, 
-            progress=False
-        )
+        if start_date:
+            df = yf.download(
+                tickers=ticker, 
+                start=start_date, 
+                end=datetime.today().strftime('%Y-%m-%d'),
+                interval="1d", 
+                auto_adjust=False, 
+                progress=False
+            )
+        else:
+            df = yf.download(
+                tickers=ticker, 
+                period=period, 
+                interval="1d", 
+                auto_adjust=False, 
+                progress=False
+            )
         
         if df.empty:
-            logger.error("❌ Données vides retournées par yfinance.")
             return pd.DataFrame()
             
         df = df.reset_index()
         df['Ticker'] = ticker
-        
-        # Renommage pour compatibilité Delta
         df = df.rename(columns={'Adj Close': 'AdjClose'})
         
-        # Nettoyage colonnes
         expected_cols = ['Date', 'Ticker', 'Open', 'High', 'Low', 'Close', 'AdjClose', 'Volume']
         df = df[expected_cols]
         
@@ -116,7 +139,21 @@ def save_to_lake(spark, pandas_df, path):
         sdf = sdf.withColumn("Date", to_date(col("Date"))) \
                  .withColumn("Volume", col("Volume").cast(LongType()))
                  
-        sdf.write.format("delta").mode("overwrite").option("mergeSchema", "true").save(path)
+        # --- DELTA MERGE FOR DATA PRESERVATION ---
+        from delta.tables import DeltaTable
+        if DeltaTable.isDeltaTable(spark, path):
+            logger.info(f"🔄 Merging into existing Delta table at {path}...")
+            dt = DeltaTable.forPath(spark, path)
+            dt.alias("target").merge(
+                sdf.alias("source"),
+                "target.Date = source.Date AND target.Ticker = source.Ticker"
+            ).whenMatchedUpdateAll() \
+             .whenNotMatchedInsertAll() \
+             .execute()
+        else:
+            logger.info(f"🆕 Creating new Delta table at {path}...")
+            sdf.write.format("delta").mode("overwrite").save(path)
+            
         logger.info(f"✅ Sauvegardé avec succès.")
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde: {e}")
@@ -126,12 +163,21 @@ def main():
     spark = create_spark_session(app_name="Ingestion_SP500_Bronze")
     
     try:
-        df_raw = fetch_sp500_max()
+        from delta.tables import DeltaTable
+        
+        # 1. Check High Water Mark
+        last_date, is_inc = get_max_date_from_lake(spark, Paths.DATA_RAW_SP500)
+        
+        # 2. Fetch Data
+        df_raw = fetch_sp500(start_date=last_date, period="max")
+        
         if not df_raw.empty:
             d, w, m = process_frequencies(df_raw)
             save_to_lake(spark, d, Paths.DATA_RAW_SP500)
             save_to_lake(spark, w, Paths.DATA_RAW_SP500_WEEKLY)
             save_to_lake(spark, m, Paths.DATA_RAW_SP500_MONTHLY)
+        else:
+            logger.info("💤 No new SP500 data to process.")
             
     finally:
         spark.stop()
