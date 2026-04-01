@@ -147,7 +147,7 @@ def process_data(df_daily, all_tickers):
     final_weekly_df = pd.merge(master_df_weekly, resampled_weekly, on=['Ticker', 'Date'], how='left')
     
     # --- 3. MONTHLY PIPELINE ---
-    resampled_monthly = df_for_resampling.groupby('Ticker').resample('BME').agg({
+    resampled_monthly = df_for_resampling.groupby('Ticker').resample('BM').agg({
         'Open': 'first',
         'High': 'max',
         'Low': 'min',
@@ -156,7 +156,7 @@ def process_data(df_daily, all_tickers):
         'Volume': 'sum'
     }).reset_index()
 
-    master_dates_monthly = pd.date_range(start=min_date, end=max_date, freq='BME')
+    master_dates_monthly = pd.date_range(start=min_date, end=max_date, freq='BM')
     master_df_monthly = pd.MultiIndex.from_product([all_tickers, master_dates_monthly], names=['Ticker', 'Date']).to_frame(index=False)
     final_monthly_df = pd.merge(master_df_monthly, resampled_monthly, on=['Ticker', 'Date'], how='left')
     

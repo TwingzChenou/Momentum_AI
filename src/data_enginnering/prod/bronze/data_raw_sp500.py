@@ -112,7 +112,7 @@ def process_frequencies(df_raw):
     resampled_weekly['Ticker'] = ticker
     
     # 3. MONTHLY (BME)
-    resampled_monthly = df_res.resample('BME').agg({
+    resampled_monthly = df_res.resample('BM').agg({
         'Open': 'first',
         'High': 'max',
         'Low': 'min',

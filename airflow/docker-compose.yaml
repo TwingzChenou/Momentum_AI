@@ -33,7 +33,7 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - PYTHONPATH=/opt/airflow
       - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
-      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/finance-ml-project-486410-f1cda0a08e1a.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/keys_gcp/finance-ml-project-486410-f5aa9a641051.json
     restart: always
 
   airflow-scheduler:
@@ -57,7 +57,7 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - PYTHONPATH=/opt/airflow
       - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
-      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/finance-ml-project-486410-f1cda0a08e1a.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/keys_gcp/finance-ml-project-486410-f5aa9a641051.json
     restart: always
 
   airflow-init:
