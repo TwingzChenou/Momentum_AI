@@ -1,0 +1,9 @@
+{
+  "expectations": [],
+  "id": "3601f382-29cd-433f-8ad1-591762c141ec",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "gold_momentum_features_suite",
+  "notes": null
+}

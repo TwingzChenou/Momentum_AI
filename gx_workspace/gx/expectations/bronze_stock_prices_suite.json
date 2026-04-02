@@ -1,0 +1,9 @@
+{
+  "expectations": [],
+  "id": "d98a717c-8568-4b8c-a079-86f26cca47c9",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "bronze_stock_prices_suite",
+  "notes": null
+}

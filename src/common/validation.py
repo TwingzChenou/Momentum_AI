@@ -17,27 +17,36 @@ def validate_spark_df(df: DataFrame, suite_name: str):
     
     # 1. Get Context (GE 1.x)
     try:
-        context = gx.get_context(project_root_dir=ROOT_DIR)
+        # Avoid shadowing by pointing to the renamed workspace folder
+        gx_dir = os.path.join(ROOT_DIR, "gx_workspace")
+        context = gx.get_context(project_root_dir=gx_dir)
     except Exception as e:
         logger.error(f"❌ Failed to load GX Context: {e}")
         raise
     
-    # 2. Setup Spark Datasource (Ephemeral/Fluent)
+    # 2. Setup Spark Datasource (Fluent API)
     ds_name = "spark_datasource"
     try:
         datasource = context.data_sources.get(ds_name)
     except:
         datasource = context.data_sources.add_spark(ds_name)
     
-    # 3. Setup Data Asset
+    # 3. Setup Data Asset & Batch Definition (GX 1.x pattern)
     asset_name = f"asset_{suite_name}"
     try:
         asset = datasource.get_asset(asset_name)
     except:
-        asset = datasource.add_dataframe_asset(asset_name)
+        asset = datasource.add_dataframe_asset(name=asset_name)
     
-    # 4. Build Batch Request
-    batch_request = asset.build_batch_request(dataframe=df)
+    # Add batch definition if not exists
+    batch_def_name = f"batch_def_{suite_name}"
+    try:
+        batch_definition = asset.get_batch_definition(batch_def_name)
+    except:
+        batch_definition = asset.add_batch_definition_whole_dataframe(name=batch_def_name)
+    
+    # 4. Get Batch (Passing the actual Spark DataFrame here)
+    batch = batch_definition.get_batch(batch_parameters={"dataframe": df})
     
     # 5. Get Expectation Suite
     try:
@@ -46,9 +55,9 @@ def validate_spark_df(df: DataFrame, suite_name: str):
         logger.warning(f"⚠️ Expectation Suite '{suite_name}' not found. Creating an empty one.")
         suite = context.suites.add(gx.ExpectationSuite(name=suite_name))
     
-    # 6. Run Validator
+    # 6. Run Validator using the Batch
     validator = context.get_validator(
-        batch_request=batch_request,
+        batch=batch,
         expectation_suite=suite
     )
     

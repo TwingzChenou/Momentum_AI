@@ -1,0 +1,9 @@
+{
+  "expectations": [],
+  "id": "24dbc50b-0b31-478a-bb32-4b2e6bc2fee8",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "silver_weekly_prices_suite",
+  "notes": null
+}
