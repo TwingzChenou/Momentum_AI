@@ -1,0 +1,40 @@
+config_version: 4.0
+
+data_docs_sites:
+  gcs_site:
+    class_name: SiteBuilder
+    store_backend:
+      class_name: TupleGCSStoreBackend
+      project: finance-ml-project-486410
+      bucket: finance-data-lake-unique-id
+      prefix: data_quality_reports/
+    module_name: great_expectations.render.renderer.site_builder
+    index_page_resource_name: index.html
+
+# We also need to define where expectations and checkpoints are stored if we want to use the CLI/YAML
+expectations_store_name: expectations_store
+checkpoints_store_name: checkpoints_store
+validation_results_store_name: validations_store
+evaluation_parameter_store_name: evaluation_parameter_store
+
+stores:
+  expectations_store:
+    class_name: ExpectationsStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: expectation_suites/
+
+  checkpoints_store:
+    class_name: CheckpointStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: checkpoints/
+
+  validations_store:
+    class_name: ValidationsStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/validations/
+
+  evaluation_parameter_store:
+    class_name: EvaluationParameterStore

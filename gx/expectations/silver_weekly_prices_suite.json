@@ -1,0 +1,28 @@
+{
+  "expectations": [
+    {
+      "id": "d703f262-fbbb-4b14-98fa-8b84161765a7",
+      "kwargs": {
+        "column": "AdjClose"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "82dd3a4b-ecae-4f26-8220-d421bb267c6c",
+      "kwargs": {
+        "column": "Date"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    }
+  ],
+  "id": "50f13fa1-ed07-42c2-9a60-590e8f4daeab",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "silver_weekly_prices_suite",
+  "notes": null
+}

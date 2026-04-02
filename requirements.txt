@@ -19,3 +19,9 @@ requests
 lxml
 aiohttp
 pyarrow
+
+# Data Validation & ML Tracking
+mlflow
+joblib
+great-expectations
+google-cloud-storage

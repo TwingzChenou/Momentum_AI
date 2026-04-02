@@ -1,0 +1,28 @@
+{
+  "expectations": [
+    {
+      "id": "399c3680-94fb-4479-95a1-39b543344c83",
+      "kwargs": {
+        "column": "SMA_12"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "73229cc1-8e2c-492f-80e8-097d33fa8e28",
+      "kwargs": {
+        "column": "SMA_26"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    }
+  ],
+  "id": "2f2cad5e-998f-466d-bd43-65207dbf9b83",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "gold_momentum_features_suite",
+  "notes": null
+}
