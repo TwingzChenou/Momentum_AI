@@ -6,6 +6,7 @@ import plotly.express as px
 import pandas as pd
 import numpy as np
 import datetime
+import mlflow
 
 # --- SETUP PATHS ---
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -90,10 +91,64 @@ footer {visibility: hidden;}
 def init_spark():
     return create_spark_session(app_name="Streamlit_Backtester", log_level="ERROR")
 
+@st.cache_data(show_spinner="🔍 Connexion au conteneur MLFlow interne...", ttl=3600)
+def get_mlflow_config_from_docker():
+    try:
+        # Port par défaut si l'on n'est pas dans Docker (usage Mac natif)
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+        
+        # Mode Conteneurisé : Streamlit tape directement sur le service interne 'mlflow' de docker-compose
+        if os.path.exists("/.dockerenv"):
+            final_uri = "http://mlflow:5000"
+        else:
+            final_uri = mlflow_uri
+            
+        mlflow.set_tracking_uri(final_uri)
+        
+        # Passage EXPLICITE de l'URI au client pour ne PAS utiliser de potentielles configurations SQLite en cache
+        client = mlflow.tracking.MlflowClient(tracking_uri=final_uri, registry_uri=final_uri)
+        model_version = client.get_model_version_by_alias("Momentum_Strategy", "champion")
+        best = client.get_run(model_version.run_id).data.params
+        
+        config = {
+            'sp500_sma_slow': int(best.get('sp500_sma_slow', 40)),
+            'sp500_sma_fast': int(best.get('sp500_sma_fast', 20)),
+            'stock_sma_fast': int(best.get('stock_sma_fast', 30)),
+            'stock_sma_slow': int(best.get('stock_sma_slow', 40)),
+            'etf_sma_fast': int(best.get('etf_sma_fast', 29)),
+            'etf_sma_slow': int(best.get('etf_sma_slow', 50)),
+            'stock_atr_threshold': float(best.get('stock_atr_threshold', 0.1)),
+            'stock_adx_threshold': float(best.get('stock_adx_threshold', 20.0)),
+            'use_pullback': str(best.get('use_pullback', 'False')).lower() == 'true',
+            'use_cond_1W': str(best.get('use_cond_1W', 'True')).lower() == 'true',
+            'buffer_n': int(best.get('buffer_n', 15)),
+            'top_n': int(best.get('top_n', 10)),
+            'rebalance_freq': best.get('rebalance_freq', '1M'),
+            'stock_mom_period': int(best.get('stock_mom_period', 13)),
+            'etf_mom_period': int(best.get('etf_mom_period', 13)),
+            'cash_yield': float(best.get('cash_yield', 0.04)),
+            'margin_rate': float(best.get('margin_rate', 0.06)),
+            'fees': float(best.get('fees', 0.001))
+        }
+        return config
+    except Exception as e:
+        import traceback
+        st.error(f"❌ Erreur de connexion au Registre MLFlow : {e}")
+        st.error(traceback.format_exc())
+        
+    # Default fallback
+    return {
+        'sp500_sma_slow': 50, 'sp500_sma_fast': 26, 'stock_sma_fast': 26, 'stock_sma_slow': 50,
+        'etf_sma_fast': 12, 'etf_sma_slow': 26, 'stock_atr_threshold': 0.1, 'stock_adx_threshold': 20.0,
+        'use_pullback': False, 'use_cond_1W': True, 'buffer_n': 15, 'top_n': 10, 'rebalance_freq': '1M',
+        'stock_mom_period': 13, 'etf_mom_period': 13, 'cash_yield': 0.04, 'margin_rate': 0.06, 'fees': 0.001
+    }
+
 @st.cache_data(show_spinner="🧠 Calcul de l'Intelligence Financière en cours...", ttl=3600)
-def compute_backtest(start_date, leverage):
+def compute_backtest(start_date, leverage, config):
     spark = init_spark()
     engine = RegimeSwitchingMomentumBacktester(
+        config=config,
         start_date=start_date.strftime("%Y-%m-%d"), 
         leverage=leverage
     )
@@ -166,7 +221,10 @@ st.markdown('<h1 class="main-title">Momentum AI</h1>', unsafe_allow_html=True)
 
 if run_button or 'perf_df' in st.session_state:
     try:
-        perf_df, allocations = compute_backtest(start_date, leverage)
+        config = get_mlflow_config_from_docker()
+        st.sidebar.success(f"✅ Modèle MLFlow : Top {config['top_n']} actions | {config['rebalance_freq']}")
+        
+        perf_df, allocations = compute_backtest(start_date, leverage, config)
         
         # Sauver dans le state pour éviter le rechargement forcé
         st.session_state['perf_df'] = perf_df
@@ -175,6 +233,10 @@ if run_button or 'perf_df' in st.session_state:
         if perf_df.empty:
             st.error("Aucune donnée générée. Vérifiez si les tables GOLD sont remplies ou si les dates sont cohérentes.")
             st.stop()
+            
+        # Affichage de la fraîcheur des données Airflow (Date maximale disponible)
+        last_data_date = perf_df.index[-1].strftime('%d/%m/%Y')
+        st.info(f"🔄 **Base de Données AirFlow** : Fraîcheur des cotations garantie jusqu'au **{last_data_date}**")
             
         # --- CALCUL DES KPIs ---
         # Rendement total

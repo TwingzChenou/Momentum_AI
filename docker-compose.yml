@@ -14,9 +14,17 @@ services:
       - PYSPARK_PYTHON=python3
       - PYSPARK_DRIVER_PYTHON=python3
       - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED
+    depends_on:
+      - mlflow
     # Relancer automatiquement si crash
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 4G
+  mlflow:
+    build: .
+    container_name: momentum-mlflow-server
+    volumes:
+      - .:/app
+    ports:
+      - "5001:5000"
+    command: >
+      bash -c "mlflow db upgrade sqlite:///mlflow.db && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --allowed-hosts mlflow:5000,mlflow,localhost,127.0.0.1"
+    restart: unless-stopped
