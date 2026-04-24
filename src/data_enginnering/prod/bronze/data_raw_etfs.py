@@ -167,6 +167,10 @@ def save_to_lake(spark, pandas_df, path):
     """
     Saves the processed pandas DataFrame to Delta Lake.
     """
+    if pandas_df.empty:
+        logger.warning(f"⚠️ Skipping save to {path}: DataFrame is empty.")
+        return
+
     logger.info(f"💾 Saving {pandas_df.shape[0]} rows to {path}...")
     
     pandas_df['Date'] = pandas_df['Date'].dt.strftime('%Y-%m-%d')
@@ -208,6 +212,7 @@ def save_to_lake(spark, pandas_df, path):
         
     except Exception as e:
         logger.error(f"❌ Error saving raw data to Lake: {e}")
+        raise e
 
 def main():
     setup_logging()
@@ -222,8 +227,14 @@ def main():
         # 1. Check High Water Mark
         last_date, is_inc = get_max_date_from_lake(spark, Paths.DATA_RAW_ETF)
         
-        # 2. Fetch Data (Incremental or Full)
-        df_daily = fetch_data_in_chunks(ETF_TICKERS, start_date=last_date, period="max", chunk_size=100)
+        # 2. Fetch Data (Fetch last 60 days to ensure weekly/monthly resampling catch-up)
+        fetch_start = None
+        if last_date:
+            from datetime import timedelta
+            fetch_start = (datetime.strptime(last_date, '%Y-%m-%d') - timedelta(days=60)).strftime('%Y-%m-%d')
+            logger.info(f"🔄 Incremental mode: fetching from {fetch_start} (60 days before last date {last_date})")
+
+        df_daily = fetch_data_in_chunks(ETF_TICKERS, start_date=fetch_start, period="max", chunk_size=100)
         
         if df_daily.empty:
             logger.info("💤 No new ETF data to process.")

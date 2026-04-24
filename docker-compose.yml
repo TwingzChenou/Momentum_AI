@@ -22,9 +22,14 @@ services:
     build: .
     container_name: momentum-mlflow-server
     volumes:
-      - .:/app
+      - mlflow_data:/mlflow
     ports:
       - "5001:5000"
+    environment:
+      - MLFLOW_HTTP_REQUEST_ALLOWED_HOSTS="*"
     command: >
-      bash -c "mlflow db upgrade sqlite:///mlflow.db && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --allowed-hosts mlflow:5000,mlflow,localhost,127.0.0.1"
+      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/mlruns --allowed-hosts '*'
     restart: unless-stopped
+
+volumes:
+  mlflow_data:

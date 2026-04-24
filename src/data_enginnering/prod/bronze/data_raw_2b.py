@@ -179,6 +179,10 @@ def save_to_lake(spark, pandas_df, path):
     """
     Saves the processed pandas DataFrame to Delta Lake.
     """
+    if pandas_df.empty:
+        logger.warning(f"⚠️ Skipping save to {path}: DataFrame is empty.")
+        return
+
     logger.info(f"💾 Saving {pandas_df.shape[0]} rows to {path}...")
     
     # Ensure safe types for Spark conversion
@@ -208,9 +212,9 @@ def save_to_lake(spark, pandas_df, path):
                  .withColumn("Volume", col("Volume").cast(LongType()))
                  
         # --- DELTA MERGE FOR DATA PRESERVATION ---
+        from delta.tables import DeltaTable
         if DeltaTable.isDeltaTable(spark, path):
             logger.info("🔄 Merging into existing Delta table...")
-            from delta.tables import DeltaTable
             dt = DeltaTable.forPath(spark, path)
             dt.alias("target").merge(
                 sdf.alias("source"),
@@ -226,6 +230,7 @@ def save_to_lake(spark, pandas_df, path):
         
     except Exception as e:
         logger.error(f"❌ Error saving raw data to Lake: {e}")
+        raise e
 
 def main():
     setup_logging()
@@ -245,8 +250,14 @@ def main():
         # 2. Check High Water Mark
         last_date, is_inc = get_max_date_from_lake(spark, Paths.DATA_RAW_2B)
         
-        # 3. Fetch Data (Incremental if possible)
-        df_daily = fetch_data_in_chunks(tickers, start_date=last_date, period="2y", chunk_size=100)
+        # 3. Fetch Data (Fetch last 60 days to ensure weekly/monthly resampling catch-up)
+        fetch_start = None
+        if last_date:
+            from datetime import timedelta
+            fetch_start = (datetime.strptime(last_date, '%Y-%m-%d') - timedelta(days=60)).strftime('%Y-%m-%d')
+            logger.info(f"🔄 Incremental mode: fetching from {fetch_start} (60 days before last date {last_date})")
+        
+        df_daily = fetch_data_in_chunks(tickers, start_date=fetch_start, period="2y", chunk_size=100)
         
         if df_daily.empty:
             logger.info("💤 No new data to process.")

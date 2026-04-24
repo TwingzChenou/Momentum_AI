@@ -128,6 +128,10 @@ def save_to_lake(spark, pandas_df, path):
     """
     Sauvegarde en Delta Lake.
     """
+    if pandas_df.empty:
+        logger.warning(f"⚠️ Skipping save to {path}: DataFrame is empty.")
+        return
+
     logger.info(f"💾 Sauvegarde de {len(pandas_df)} lignes vers {path}...")
     
     pandas_df['Date'] = pandas_df['Date'].dt.strftime('%Y-%m-%d')
@@ -157,6 +161,7 @@ def save_to_lake(spark, pandas_df, path):
         logger.info(f"✅ Sauvegardé avec succès.")
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde: {e}")
+        raise e
 
 def main():
     setup_logging()
@@ -168,8 +173,14 @@ def main():
         # 1. Check High Water Mark
         last_date, is_inc = get_max_date_from_lake(spark, Paths.DATA_RAW_SP500)
         
-        # 2. Fetch Data
-        df_raw = fetch_sp500(start_date=last_date, period="max")
+        # 2. Fetch Data (Fetch last 60 days to ensure weekly/monthly resampling catch-up)
+        fetch_start = None
+        if last_date:
+            from datetime import timedelta
+            fetch_start = (datetime.strptime(last_date, '%Y-%m-%d') - timedelta(days=60)).strftime('%Y-%m-%d')
+            logger.info(f"🔄 Incremental mode: fetching from {fetch_start} (60 days before last date {last_date})")
+
+        df_raw = fetch_sp500(start_date=fetch_start, period="max")
         
         if not df_raw.empty:
             d, w, m = process_frequencies(df_raw)
