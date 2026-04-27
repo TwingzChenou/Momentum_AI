@@ -23,5 +23,6 @@ pyarrow
 # Data Validation & ML Tracking
 mlflow
 joblib
+optuna
 great-expectations
 google-cloud-storage

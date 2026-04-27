@@ -68,3 +68,6 @@ Alternatively, enable Column Mapping to keep using these characters.
 15 Failed downloads:
 2026-03-31 11:18:33 | ERROR | ['XLC', 'XLB', 'VNQ', 'XLK', 'GLD', 'HYG', 'XLE', 'XLI', 'XLU', 'XLV', 'XLY', 'XLP', 'TLT', 'IEF', 'XLRE']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
 2026-03-31 11:18:33 | ERROR | ❌ No data retrieved from yfinance.
+2026-04-25 17:18:39 | ERROR | 
+1 Failed download:
+2026-04-25 17:18:39 | ERROR | ['^GSPC']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')

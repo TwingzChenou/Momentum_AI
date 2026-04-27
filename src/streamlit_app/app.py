@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import datetime
 import mlflow
+from loguru import logger
 
 # --- SETUP PATHS ---
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -14,6 +15,7 @@ from src.common.setup_spark import create_spark_session
 import importlib
 import src.strategy.backtest_engine as backtest_engine
 importlib.reload(backtest_engine)
+from src.common.config_utils import get_champion_config
 from src.strategy.backtest_engine import RegimeSwitchingMomentumBacktester
 from config.config_spark import Paths
 
@@ -155,108 +157,63 @@ footer {visibility: hidden;}
 """, unsafe_allow_html=True)
 
 # --- CACHING & DATA LOADERS ---
-# FORCE CLEAR CACHING ON RELOAD (Temporary for validation)
-st.cache_data.clear()
-st.cache_resource.clear()
 
 @st.cache_resource(show_spinner="🔌 Initialisation de Spark... (Peut prendre 5s)")
 def init_spark():
     return create_spark_session(app_name="Streamlit_Backtester", log_level="ERROR")
 
-@st.cache_data(show_spinner="🔍 Recherche du meilleur modèle dans MLFlow...", ttl=10)
-def get_mlflow_config_from_docker():
-    try:
-        # Configuration de l'URI
-        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
-        if os.path.exists("/.dockerenv"):
-            final_uri = "http://mlflow:5000"
-        else:
-            final_uri = mlflow_uri
-            
-        mlflow.set_tracking_uri(final_uri)
-        
-        # 1. Identifier l'expérience
-        experiment_name = "Momentum_Bayesian_Optimization_v2_Calmar"
-        exp = mlflow.get_experiment_by_name(experiment_name)
-        
-        if exp is None:
-            st.sidebar.warning(f"⚠️ Expérience '{experiment_name}' introuvable. Utilisation des paramètres par défaut.")
-            return get_default_config()
-
-        # 2. Chercher le meilleur Run (celui avec le meilleur Calmar Ratio)
-        runs = mlflow.search_runs(
-            experiment_ids=[exp.experiment_id],
-            max_results=1,
-            order_by=["metrics.calmar DESC"]
-        )
-        
-        if runs.empty:
-            st.sidebar.info("ℹ️ Aucun run trouvé dans MLflow. Lancez le notebook d'optimisation !")
-            return get_default_config()
-            
-        # Extraction des paramètres du meilleur run
-        best_run = runs.iloc[0]
-        best_params = {k.replace("params.", ""): v for k, v in best_run.items() if k.startswith("params.")}
-        
-        st.sidebar.success(f"🏆 Meilleur Run chargé (Calmar: {best_run['metrics.calmar']:.2f})")
-        
-        # Mapping et conversion des types
-        config = {
-            'sp500_sma_slow': int(float(best_params.get('sp500_sma_slow', 40))),
-            'sp500_sma_fast': int(float(best_params.get('sp500_sma_fast', 20))),
-            'stock_sma_fast': int(float(best_params.get('stock_sma_fast', 30))),
-            'stock_sma_slow': int(float(best_params.get('stock_sma_slow', 40))),
-            'etf_sma_fast': int(float(best_params.get('etf_sma_fast', 29))),
-            'etf_sma_slow': int(float(best_params.get('etf_sma_slow', 50))),
-            'stock_atr_threshold': float(best_params.get('stock_atr_threshold', 0.1)),
-            'stock_adx_threshold': float(best_params.get('stock_adx_threshold', 20.0)),
-            'buffer_n': int(float(best_params.get('buffer_n', 15))),
-            'top_n': int(float(best_params.get('top_n', 10))),
-            'rebalance_freq': best_params.get('rebalance_freq', '1M'),
-            'stock_mom_period': int(float(best_params.get('stock_mom_period', 13))),
-            'etf_mom_period': int(float(best_params.get('etf_mom_period', 13))),
-            'cash_yield': float(best_params.get('cash_yield', 0.04)),
-            'margin_rate': float(best_params.get('margin_rate', 0.06)),
-            'fees': float(best_params.get('fees', 0.001)),
-            # Ces conditions sont désormais désactivées par défaut (stratégie pure)
-            'use_pullback': False,
-            'use_cond_1W': False
-        }
-        return config
-
-    except Exception as e:
-        st.error(f"❌ Erreur MLFlow : {e}")
-        return get_default_config()
-
-def get_default_config():
-    """Paramètres de secours si MLflow est vide ou inaccessible"""
-    return {
-        'sp500_sma_slow': 50, 'sp500_sma_fast': 26, 'stock_sma_fast': 26, 'stock_sma_slow': 50,
-        'etf_sma_fast': 12, 'etf_sma_slow': 26, 'stock_atr_threshold': 0.1, 'stock_adx_threshold': 20.0,
-        'use_pullback': False, 'use_cond_1W': False, 'buffer_n': 15, 'top_n': 10, 'rebalance_freq': '1M',
-        'stock_mom_period': 13, 'etf_mom_period': 13, 'cash_yield': 0.04, 'margin_rate': 0.06, 'fees': 0.001
-    }
-
-# @st.cache_data(show_spinner="🧠 Calcul de l'Intelligence Financière en cours...", ttl=10)
-def compute_backtest(start_date, leverage, config):
+@st.cache_data(show_spinner="📥 Chargement des données GOLD (BigQuery)...", ttl=3600)
+def load_and_prep_all_data(start_date_str, config_dict):
     spark = init_spark()
-    engine = RegimeSwitchingMomentumBacktester(
-        config=config,
-        start_date=start_date.strftime("%Y-%m-%d"), 
-        leverage=leverage
-    )
     
-    # Exécution complète de la stratégie
-    df_sp500 = engine.get_sp500_regime(spark)
-    df_etf, df_stocks = engine.load_and_prep_data(spark, Paths.BQ_ETF_GOLD, Paths.BQ_STOCKS_GOLD)
+    # 1. Indice S&P 500 via BigQuery GOLD
+    # 1. S&P 500 via BigQuery GOLD
+    df_sp500 = spark.read.format("bigquery").option("table", Paths.BQ_SP500_GOLD).load().toPandas()
+    
+    # Normalisation pour l'indexation temporelle
+    if 'Date' in df_sp500.columns:
+        df_sp500['Date'] = pd.to_datetime(df_sp500['Date']).dt.normalize()
+        df_sp500 = df_sp500.set_index('Date').sort_index()
+    
+    # 2. ETFs via BigQuery GOLD
+    df_etf = spark.read.format("bigquery").option("table", Paths.BQ_ETF_GOLD).load().toPandas()
+    df_etf['Date'] = pd.to_datetime(df_etf['Date']).dt.tz_localize(None).dt.normalize()
+    
+    # 3. Actions via BigQuery GOLD
+    df_stocks = spark.read.format("bigquery").option("table", Paths.BQ_STOCKS_GOLD).load().toPandas()
+    df_stocks['Date'] = pd.to_datetime(df_stocks['Date']).dt.tz_localize(None).dt.normalize()
+
+    # Initialisation du moteur
+    engine = RegimeSwitchingMomentumBacktester(config=config_dict, start_date=start_date_str)
+    
+    # Note: On laisse le moteur gérer la préparation interne lors du simulate_portfolio.
+    # On s'assure juste que le S&P 500 a son régime pour l'affichage des graphiques.
+    df_sp500 = engine.get_sp500_regime_from_df(df_sp500)
+    
+    return df_sp500, df_etf, df_stocks
+
+@st.cache_data(show_spinner="🔍 Recherche du meilleur modèle dans MLFlow...", ttl=10)
+def load_champion_config():
+    config = get_champion_config()
+    if 'calmar' in config: # Optionnel: log d'info si présent
+         st.sidebar.success("🏆 Meilleur Run chargé depuis MLFlow")
+    return config
+
+@st.cache_data(show_spinner="🧠 Calcul de l'Intelligence Financière en cours...", ttl=300)
+def compute_backtest_cached(start_date_str, leverage, config_dict):
+    # On charge les données (cachées)
+    df_sp500, df_etf, df_stocks = load_and_prep_all_data(start_date_str, config_dict)
     
     if df_stocks.empty and df_etf.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-        
-    # --- DEBUG INFO ---
-    latest_date = df_stocks['date'].max() if not df_stocks.empty else "N/A"
-    st.sidebar.info(f"📅 Dernières données chargées : {latest_date}")
-        
+    
+    engine = RegimeSwitchingMomentumBacktester(
+        config=config_dict,
+        start_date=start_date_str, 
+        leverage=leverage
+    )
+    
+    # Exécution du backtest (rapide grâce aux index/dictionnaires)
     allocations = engine.simulate_portfolio(df_sp500, df_etf, df_stocks)
     perf_df = engine.generate_performance(allocations, df_etf, df_stocks, df_sp500)
     
@@ -311,16 +268,17 @@ start_date = st.sidebar.date_input(
     key="start_date_input"
 )
 
-leverage = st.sidebar.slider("Niveau de Levier (x)", min_value=1.0, max_value=3.0, value=1.5, step=0.1)
+leverage = st.sidebar.slider("🚀 Effet de Levier", 1.0, 3.0, 1.0, 0.1)
 
 run_button = st.sidebar.button("🚀 Lancer la Simulation", use_container_width=True)
+
 
 # --- MAIN PAGE CONFIG ---
 st.markdown('<h1 class="main-title">Momentum AI</h1>', unsafe_allow_html=True)
 
 if run_button or 'perf_df' in st.session_state:
     try:
-        config = get_mlflow_config_from_docker()
+        config = load_champion_config()
             
         st.sidebar.success(f"✅ Modèle MLFlow 'Champion' chargé")
         
@@ -335,17 +293,14 @@ if run_button or 'perf_df' in st.session_state:
             st.write(f"- S&P 500 : SMA {config['sp500_sma_fast']}/{config['sp500_sma_slow']}")
             st.write(f"- Actions : SMA {config['stock_sma_fast']}/{config['stock_sma_slow']}")
             st.markdown("**Seuils de Risque :**")
-            st.write(f"- ATR : {config['stock_atr_threshold']}")
-            st.write(f"- ADX : {config['stock_adx_threshold']}")
-            st.markdown("**Options :**")
-            st.write(f"- Pullback : {'Activé' if config['use_pullback'] else 'Désactivé'}")
-            st.write(f"- Cond. 1W : {'Activé' if config['use_cond_1W'] else 'Désactivé'}")
+            st.write(f"- ATR : {config['stock_atr_threshold']:.2f}")
+            st.write(f"- ADX : {config['stock_adx_threshold']:.1f}")
 
 
 
 
         
-        perf_df, allocations, df_etf, df_stocks = compute_backtest(start_date, leverage, config)
+        perf_df, allocations, df_etf, df_stocks = compute_backtest_cached(start_date.strftime("%Y-%m-%d"), leverage, config)
         
         # Sauver dans le state pour éviter le rechargement forcé
         st.session_state['perf_df'] = perf_df
@@ -358,26 +313,12 @@ if run_button or 'perf_df' in st.session_state:
         # Affichage de la fraîcheur des données Airflow (Date maximale disponible)
         last_data_date = perf_df.index[-1].strftime('%d/%m/%Y')
         st.info(f"🔄 **Base de Données AirFlow** : Fraîcheur des cotations garantie jusqu'au **{last_data_date}**")
-            
-        # --- CALCUL DES KPIs ---
-        # Rendement total
+
+        # --- RÉCUPÉRATION DES KPIs (Calculés par l'Engine) ---
         total_ret_strat = perf_df['Portfolio_Equity'].iloc[-1] - 100.0
-        
-        # CAGR (Compound Annual Growth Rate)
-        n_days = (perf_df.index[-1] - perf_df.index[0]).days
-        n_years = max(n_days / 365.25, 0.1) # Sécurité division par zéro
-        cagr = ((perf_df['Portfolio_Equity'].iloc[-1] / 100.0) ** (1.0 / n_years)) - 1.0
-        
-        # Sharpe Ratio (Annuélisé)
-        # On assume un taux sans risque de 0% pour le calcul rapide
-        weekly_returns = perf_df['Portfolio_Return']
-        vol_ann = weekly_returns.std() * np.sqrt(52)
-        sharpe = (weekly_returns.mean() * 52) / vol_ann if vol_ann > 0 else 0
-        
-        # Max Drawdown
-        roll_max = perf_df['Portfolio_Equity'].cummax()
-        drawdown = (perf_df['Portfolio_Equity'] / roll_max) - 1.0
-        max_drawdown = drawdown.min() * 100.0
+        cagr = perf_df['CAGR'].iloc[-1] if 'CAGR' in perf_df.columns else 0
+        sharpe = perf_df['Sharpe_Ratio'].iloc[-1] if 'Sharpe_Ratio' in perf_df.columns else 0
+        max_drawdown = -perf_df['Max_Drawdown'].iloc[-1] * 100.0 if 'Max_Drawdown' in perf_df.columns else 0
         
         # --- DISPLAY KPIs (GROS NOMBRES) ---
         col1, col2, col3, col4 = st.columns(4)
@@ -415,7 +356,7 @@ if run_button or 'perf_df' in st.session_state:
             """, unsafe_allow_html=True)
             
         st.write("---")
-        
+
         # --- 📈 PLOTLY EQUITY CURVE (PREMIUM DESIGN) ---
         st.subheader("Évolution de la Valeur du Portefeuille ($)")
         
@@ -425,14 +366,14 @@ if run_button or 'perf_df' in st.session_state:
         
         fig_equity = go.Figure()
         
-        # Courbe principale (Momentum) avec effet de lueur
+        # Courbe principale (Momentum)
         fig_equity.add_trace(go.Scatter(
             x=perf_df.index, y=perf_df['Portfolio_Value'],
             mode='lines',
             name='Portefeuille Momentum',
-            line=dict(color='#00f2fe', width=4, shape='spline', smoothing=1.3),
+            line=dict(color='#4facfe', width=3),
             fill='tozeroy',
-            fillcolor='rgba(0, 242, 254, 0.05)',
+            fillcolor='rgba(79, 172, 254, 0.1)',
             hovertemplate='<b>Date</b>: %{x}<br><b>Valeur</b>: $ %{y:,.0f}<extra></extra>'
         ))
         
@@ -542,8 +483,12 @@ if run_button or 'perf_df' in st.session_state:
             st.subheader("📜 Historique Détaillé du Portefeuille")
             
             with st.spinner("Calcul des performances historiques..."):
+                # On décale les allocations pour afficher ce qu'on détenait RÉELLEMENT pendant la période
+                # La performance affichée à T est celle des actifs choisis à T-1
+                alloc_hist = allocations.shift(1).fillna(0)
+                
                 # 1. Identifier les blocs de détention continus pour chaque ticker
-                is_held = allocations > 0
+                is_held = alloc_hist > 0
                 # On crée des IDs de blocs uniques par ticker
                 blocks = (is_held != is_held.shift()).cumsum()
                 # On filtre pour ne garder que les périodes de détention réelle
@@ -555,7 +500,7 @@ if run_button or 'perf_df' in st.session_state:
                 df_long.rename(columns={'index': 'Date'}, inplace=True)
                 
                 # 3. Récupération des poids (Weight)
-                weights_melted = allocations.reset_index().melt(id_vars='index', var_name='Ticker', value_name='Weight')
+                weights_melted = alloc_hist.reset_index().melt(id_vars='index', var_name='Ticker', value_name='Weight')
                 weights_melted.rename(columns={'index': 'Date'}, inplace=True)
                 df_final = pd.merge(df_long, weights_melted, on=['Date', 'Ticker'])
                 
@@ -564,40 +509,52 @@ if run_button or 'perf_df' in st.session_state:
                 
                 # 5. Mapping des prix pour calcul de performance (Optimisé)
                 price_lookup = {}
+                stocks_tickers_set = set(df_stocks['Ticker'].unique())
                 unique_tickers = df_final['Ticker'].unique()
+                
                 for t in unique_tickers:
                     if t == 'Cash': continue
-                    # Choix de la source de données (Stocks vs ETF)
-                    if t in df_stocks['Ticker'].values:
+                    if t in stocks_tickers_set:
                         p_df = df_stocks[df_stocks['Ticker'] == t]
-                        p_col = 'adjClose'
+                        p_col = 'AdjClose'
                     else:
                         p_df = df_etf[df_etf['Ticker'] == t]
                         p_col = 'Close'
                     
                     if not p_df.empty:
-                        p_df = p_df.copy()
-                        p_df['d_naive'] = pd.to_datetime(p_df['date']).dt.tz_localize(None)
-                        price_lookup[t] = dict(zip(p_df['d_naive'], p_df[p_col]))
+                        # Les dates sont déjà normalisées en pd.Timestamp par load_and_prep_all_data
+                        price_lookup[t] = dict(zip(pd.to_datetime(p_df['Date']), p_df[p_col]))
 
                 def compute_perfs(row):
                     ticker = row['Ticker']
-                    if ticker == 'Cash': return 0.0, 0.0
-                    d_now = pd.Timestamp(row['Date']).replace(tzinfo=None)
-                    d_entry = pd.Timestamp(row['EntryDate']).replace(tzinfo=None)
+                    if ticker == 'Cash': return pd.Series([0.0, 0.0])
                     
-                    # Performance Hebdo : Gain depuis la période précédente dans l'historique
+                    # Les dates d'entrée et actuelles sont déjà des Timestamps cohérents
+                    d_now = pd.to_datetime(row['Date'])
+                    d_entry = pd.to_datetime(row['EntryDate'])
+                    
                     try:
                         idx = allocations.index.get_loc(row['Date'])
                         if idx > 0:
-                            d_prev = pd.Timestamp(allocations.index[idx-1]).replace(tzinfo=None)
+                            d_prev = pd.to_datetime(allocations.index[idx-1])
                         else:
                             d_prev = d_now
                     except:
                         d_prev = d_now
                     
                     p_now = price_lookup.get(ticker, {}).get(d_now)
-                    p_entry = price_lookup.get(ticker, {}).get(d_entry)
+                    
+                    # Correction du prix d'entrée : On prend le prix de la veille (T-1) du début du bloc
+                    try:
+                        idx_entry = allocations.index.get_loc(d_entry)
+                        if idx_entry > 0:
+                            d_true_entry = allocations.index[idx_entry - 1]
+                        else:
+                            d_true_entry = d_entry
+                    except:
+                        d_true_entry = d_entry
+                        
+                    p_entry = price_lookup.get(ticker, {}).get(d_true_entry)
                     p_prev = price_lookup.get(ticker, {}).get(d_prev)
                     
                     perf_total = (p_now / p_entry - 1) * 100 if p_now and p_entry else 0.0
@@ -665,6 +622,23 @@ if run_button or 'perf_df' in st.session_state:
             st.warning("⚠️ L'algorithme est actuellement 100% Cash / Aucun Trade actif.")
     except Exception as e:
         st.error(f"❌ Une erreur interne est survenue lors du calcul : {e}")
-
 else:
-    st.info("👈 Réglez vos paramètres (Date, Levier) dans le menu de gauche et cliquez sur **Lancer la Simulation** !")
+    # --- WELCOME SCREEN ---
+    st.markdown("---")
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown("""
+        ### Bienvenue sur Momentum AI 🚀
+        
+        Cet outil utilise l'intelligence artificielle pour optimiser une stratégie de **Regime-Switching Momentum**.
+        
+        **Comment ça marche ?**
+        1. Les données sont extraites en temps réel de **BigQuery GOLD**.
+        2. Le modèle récupère la meilleure configuration ("Champion") depuis **MLFlow**.
+        3. Une simulation complète est effectuée sur l'historique choisi.
+        
+        **Prêt à commencer ?**
+        Cliquez sur le bouton **🚀 Lancer la Simulation** dans la barre latérale pour générer les analyses.
+        """)
+    with col2:
+        st.info("💡 **Astuce** : Vous pouvez modifier le levier et la date de début pour tester différents scénarios de risque.")
