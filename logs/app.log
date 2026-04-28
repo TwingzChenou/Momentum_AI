@@ -71,3 +71,52 @@ Alternatively, enable Column Mapping to keep using these characters.
 2026-04-25 17:18:39 | ERROR | 
 1 Failed download:
 2026-04-25 17:18:39 | ERROR | ['^GSPC']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+2026-04-27 17:20:23 | ERROR | Error while processing DataContextConfig: validations_store_name
+2026-04-27 17:20:23 | ERROR | Encountered errors during loading config.  See ValidationError for more details.
+2026-04-27 17:20:23 | ERROR | ❌ Failed to load GX Context: Error while processing DataContextConfig: validations_store_name
+2026-04-27 17:20:23 | ERROR | ⚠️ Échec de la validation de qualité ETF : Error while processing DataContextConfig: validations_store_name
+2026-04-27 17:20:53 | CRITICAL | Error The module: `great_expectations.data_context.store` does not contain the class: `TupleGCSStoreBackend`.
+        - Please verify that the class named `TupleGCSStoreBackend` exists. occurred while attempting to instantiate a store.
+2026-04-27 17:20:53 | ERROR | ❌ Failed to load GX Context: The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:20:53 | ERROR | ⚠️ Échec de la validation de qualité SP500 : The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:21:30 | CRITICAL | Error The module: `great_expectations.data_context.store` does not contain the class: `TupleGCSStoreBackend`.
+        - Please verify that the class named `TupleGCSStoreBackend` exists. occurred while attempting to instantiate a store.
+2026-04-27 17:21:30 | ERROR | ❌ Failed to load GX Context: The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:21:30 | ERROR | ⚠️ Échec de la validation de qualité ETF : The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:21:31 | CRITICAL | Error The module: `great_expectations.data_context.store` does not contain the class: `TupleGCSStoreBackend`.
+        - Please verify that the class named `TupleGCSStoreBackend` exists. occurred while attempting to instantiate a store.
+2026-04-27 17:21:31 | ERROR | ❌ Failed to load GX Context: The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:21:31 | ERROR | ⚠️ Échec de la validation de qualité : The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:21:52 | CRITICAL | Error The module: `great_expectations.data_context.store` does not contain the class: `TupleGCSStoreBackend`.
+        - Please verify that the class named `TupleGCSStoreBackend` exists. occurred while attempting to instantiate a store.
+2026-04-27 17:21:52 | ERROR | ❌ Failed to load GX Context: The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:21:52 | ERROR | ⚠️ Échec de la validation de qualité SP500 : The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:22:28 | CRITICAL | Error The module: `great_expectations.data_context.store` does not contain the class: `TupleGCSStoreBackend`.
+        - Please verify that the class named `TupleGCSStoreBackend` exists. occurred while attempting to instantiate a store.
+2026-04-27 17:22:28 | ERROR | ❌ Failed to load GX Context: The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:22:28 | ERROR | ⚠️ Échec de la validation de qualité : The module "great_expectations.data_context.store" exists; however, the system is unable to create an instance of the class "ExpectationsStore", searched for inside this module.  Please make sure that the class named "ExpectationsStore" is properly defined inside its intended module and declared correctly by the calling entity.  This error is unrecoverable.
+            
+2026-04-27 17:33:48 | ERROR | ❌ Failed to sync Data Docs: ERROR: (gcloud.storage.rsync) unrecognized arguments: --delete-unmatched (did you mean '--delete-unmatched-destination-objects'?) 
+
+To search the help text of gcloud commands, run:
+  gcloud help -- SEARCH_TERMS
+
+2026-04-27 17:34:15 | ERROR | ❌ Failed to sync Data Docs: ERROR: (gcloud.storage.rsync) unrecognized arguments: --delete-unmatched (did you mean '--delete-unmatched-destination-objects'?) 
+
+To search the help text of gcloud commands, run:
+  gcloud help -- SEARCH_TERMS
+
+2026-04-27 17:34:51 | ERROR | ❌ Failed to sync Data Docs: ERROR: (gcloud.storage.rsync) unrecognized arguments: --delete-unmatched (did you mean '--delete-unmatched-destination-objects'?) 
+
+To search the help text of gcloud commands, run:
+  gcloud help -- SEARCH_TERMS
+

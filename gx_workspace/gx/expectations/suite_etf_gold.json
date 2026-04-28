@@ -1,0 +1,9 @@
+{
+  "expectations": [],
+  "id": "62554ac8-4973-453b-aef9-0b0c2496a37a",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "suite_etf_gold",
+  "notes": null
+}

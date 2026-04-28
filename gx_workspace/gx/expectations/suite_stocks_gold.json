@@ -1,0 +1,9 @@
+{
+  "expectations": [],
+  "id": "133cec02-4406-464d-9f99-a751ab4e7300",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "suite_stocks_gold",
+  "notes": null
+}

@@ -1,5 +1,6 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.email import send_email
 from datetime import datetime, timedelta
 
@@ -38,7 +39,7 @@ with DAG(
     tags=['prod', 'gold', 'gx'],
 ) as dag:
 
-    # 1. Calcul des Features
+    # 1. Calcul des Features (avec config actuelle)
     task_generate_features = BashOperator(
         task_id='generate_indicators_gold',
         bash_command='python3 /opt/airflow/src/data_enginnering/prod/gold/features_2b_etf.py',
@@ -50,5 +51,12 @@ with DAG(
         bash_command='python3 /opt/airflow/scripts/validate_gold.py',
     )
 
-    # Dépendance
-    task_generate_features >> task_validate_gold
+    # 3. DECLENCHEMENT OPTIMISATION (Optuna + MLFlow)
+    trigger_optimization = TriggerDagRunOperator(
+        task_id='trigger_strategy_optimization',
+        trigger_dag_id='strategy_optimization_weekly',
+        wait_for_completion=False,
+    )
+
+    # Dépendances
+    task_generate_features >> task_validate_gold >> trigger_optimization

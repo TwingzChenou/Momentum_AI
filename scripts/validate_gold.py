@@ -6,7 +6,7 @@ from loguru import logger
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.common.setup_spark import create_spark_session
-from src.common.validation import validate_spark_df
+from src.common.validation import validate_df
 from config.config_spark import Paths
 
 def main():
@@ -22,7 +22,7 @@ def main():
         if df_gold.isEmpty():
             raise ValueError("❌ DATA_RAW_2B_WEEKLY_GOLD table is empty!")
             
-        validate_spark_df(df_gold, "gold_momentum_features_suite")
+        validate_df(df_gold, "gold_momentum_features_suite")
         
         logger.success("✅ Gold Validation Completed Successfully.")
         

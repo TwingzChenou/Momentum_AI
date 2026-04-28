@@ -70,11 +70,6 @@ class RegimeSwitchingMomentumBacktester:
         if sp500.empty:
             return pd.DataFrame()
             
-        # Normalisation universelle
-        mapping = {'date': 'Date', 'close': 'Close', 'adjclose': 'Close'}
-        cols_to_rename = {old: new for old, new in mapping.items() if old in sp500.columns and new not in sp500.columns}
-        sp500 = sp500.rename(columns=cols_to_rename)
-
         sp500 = sp500.set_index('Date')
         sp500 = sp500.sort_index()
         sp500.index = pd.to_datetime(sp500.index)
@@ -119,7 +114,7 @@ class RegimeSwitchingMomentumBacktester:
                 df_etf['Momentum_XM'] = df_etf.groupby('Ticker')['Close'].transform(lambda x: x.pct_change(self.config.get('etf_mom_period', 13)))
             
             df_etf['Eligible'] = (df_etf['SMA_fast'] > df_etf['SMA_slow']) & (df_etf['Close'] > df_etf['SMA_slow'])
-            df_etf = df_etf.rename(columns={'Date': 'date'})
+            
             
         # 2. LOAD STOCKS
         try:
@@ -135,12 +130,12 @@ class RegimeSwitchingMomentumBacktester:
                 logger.info("✨ Utilisation des indicateurs pré-calculés pour les Actions")
             else:
                 logger.info("⚙️ Calcul local des indicateurs pour les Actions")
-                df_stocks['SMA_fast'] = df_stocks.groupby('Ticker')['AdjClose'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_fast', 26), fillna=True))
-                df_stocks['SMA_slow'] = df_stocks.groupby('Ticker')['AdjClose'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_slow', 50), fillna=True))
-                df_stocks['Momentum_XM'] = df_stocks.groupby('Ticker')['AdjClose'].transform(lambda x: x.pct_change(self.config.get('stock_mom_period', 13)))
+                df_stocks['SMA_fast'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_fast', 26), fillna=True))
+                df_stocks['SMA_slow'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_slow', 50), fillna=True))
+                df_stocks['Momentum_XM'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: x.pct_change(self.config.get('stock_mom_period', 13)))
             
             # --- RÈGLES D'ÉLIGIBILITÉ ---
-            cond_trend = (df_stocks['SMA_fast'] > df_stocks['SMA_slow']) & (df_stocks['AdjClose'] > df_stocks['SMA_slow'])
+            cond_trend = (df_stocks['SMA_fast'] > df_stocks['SMA_slow']) & (df_stocks['Close'] > df_stocks['SMA_slow'])
             
             cond_strength = True
             if 'ADX_20' in df_stocks.columns:
@@ -151,7 +146,6 @@ class RegimeSwitchingMomentumBacktester:
                 cond_volatility = df_stocks['ATR_pct'] < self.config.get('stock_atr_threshold', 0.15)
                 
             df_stocks['Eligible'] = cond_trend & cond_strength & cond_volatility
-            df_stocks = df_stocks.rename(columns={'Date': 'date', 'AdjClose': 'adjClose'})
             
         return df_etf, df_stocks
 
@@ -161,24 +155,8 @@ class RegimeSwitchingMomentumBacktester:
         """
         import ta
         
-        # 0. Normalisation universelle
-        def normalize_cols(df):
-            if df.empty: return df
-            mapping = {
-                'symbol': 'Ticker', 'ticker': 'Ticker',
-                'date': 'Date', 'adjclose': 'AdjClose', 'adj_close': 'AdjClose', 'close': 'Close'
-            }
-            # On ajoute les indicateurs GOLD au mapping
-            mapping.update({
-                'sma_fast': 'SMA_fast', 'sma_slow': 'SMA_slow',
-                'adx': 'ADX', 'atr': 'ATR', 'momentum_xm': 'Momentum_XM'
-            })
-            cols_to_rename = {old: new for old, new in mapping.items() if old in df.columns and new not in df.columns}
-            return df.rename(columns=cols_to_rename)
-
         # 1. ETFs
         if not df_etf.empty:
-            df_etf = normalize_cols(df_etf)
             df_etf['Date'] = pd.to_datetime(df_etf['Date']).dt.normalize()
             df_etf = df_etf.sort_values(['Ticker', 'Date'])
             
@@ -193,19 +171,18 @@ class RegimeSwitchingMomentumBacktester:
 
         # 2. STOCKS
         if not df_stocks.empty:
-            df_stocks = normalize_cols(df_stocks)
             df_stocks['Date'] = pd.to_datetime(df_stocks['Date']).dt.normalize()
             df_stocks = df_stocks.sort_values(['Ticker', 'Date'])
             
             # On ne recalcule que si les colonnes manquent
             if 'SMA_fast' not in df_stocks.columns or 'Momentum_XM' not in df_stocks.columns:
                 logger.info("⚙️ Calcul local des indicateurs Stocks...")
-                df_stocks['SMA_fast'] = df_stocks.groupby('Ticker')['AdjClose'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_fast', 26), fillna=True))
-                df_stocks['SMA_slow'] = df_stocks.groupby('Ticker')['AdjClose'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_slow', 50), fillna=True))
-                df_stocks['Momentum_XM'] = df_stocks.groupby('Ticker')['AdjClose'].transform(lambda x: x.pct_change(self.config.get('stock_mom_period', 13)))
+                df_stocks['SMA_fast'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_fast', 26), fillna=True))
+                df_stocks['SMA_slow'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_slow', 50), fillna=True))
+                df_stocks['Momentum_XM'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: x.pct_change(self.config.get('stock_mom_period', 13)))
             
             # Filtres techniques (On utilise ADX et ATR de BigQuery si possible)
-            cond_trend = (df_stocks['SMA_fast'] > df_stocks['SMA_slow']) & (df_stocks['AdjClose'] > df_stocks['SMA_slow'])
+            cond_trend = (df_stocks['SMA_fast'] > df_stocks['SMA_slow']) & (df_stocks['Close'] > df_stocks['SMA_slow'])
             
             cond_strength = True
             if 'ADX' in df_stocks.columns:
@@ -213,7 +190,7 @@ class RegimeSwitchingMomentumBacktester:
             
             cond_volatility = True
             if 'ATR' in df_stocks.columns:
-                cond_volatility = (df_stocks['ATR'] / df_stocks['AdjClose']) < self.config.get('stock_atr_threshold', 0.15)
+                cond_volatility = (df_stocks['ATR'] / df_stocks['Close']) < self.config.get('stock_atr_threshold', 0.15)
                 
             df_stocks['Eligible'] = cond_trend & cond_strength & cond_volatility
             
@@ -240,7 +217,7 @@ class RegimeSwitchingMomentumBacktester:
         # Dictionnaires pour accès rapide O(1)
         logger.info("📦 Indexation des données en mémoire...")
         stocks_indexed = stocks.set_index(['Date', 'Ticker'])
-        s_data = stocks_indexed[['AdjClose', 'SMA_slow', 'Momentum_XM', 'Eligible']].to_dict('index')
+        s_data = stocks_indexed[['Close', 'SMA_slow', 'Momentum_XM', 'Eligible']].to_dict('index')
         del stocks_indexed
         
         etfs_indexed = etfs.set_index(['Date', 'Ticker'])
@@ -268,9 +245,12 @@ class RegimeSwitchingMomentumBacktester:
                 t, ptype = pos['Ticker'], pos['Type']
                 if ptype == 'Stock':
                     row = s_data.get((d, t), {})
-                    price = row.get('AdjClose')
+                    price = row.get('Close')
                     sma = row.get('SMA_slow')
-                    if price and sma and price > sma: surviving.append(pos)
+                    if price and sma and price > sma: 
+                        surviving.append(pos)
+                    else:
+                        logger.debug(f"📉 {d.date()} | Sortie Stop-Loss: {t} (Price {price} <= SMA {sma})")
                 else:
                     row = e_data.get((d, t), {})
                     price = row.get('Close')
@@ -281,6 +261,8 @@ class RegimeSwitchingMomentumBacktester:
             # --- 2. REBALANCEMENT ---
             is_breakout = (prev_regime == 'Bear' and regime == 'Bull')
             if d in rebalance_dates or is_breakout or prev_regime is None:
+                logger.info(f"🔄 {d.date()} | Rebalancement ({regime}) | Portfolio actuel: {len(current_portfolio)} actifs")
+                
                 if regime == 'Bull':
                     # On garde les stocks actuels qui sont encore bons
                     current_portfolio = [p for p in current_portfolio if p['Type'] == 'Stock']
@@ -288,7 +270,14 @@ class RegimeSwitchingMomentumBacktester:
                     
                     # Sélection des nouveaux
                     day_stocks = stocks[stocks['Date'] == d].copy()
-                    if not day_stocks.empty:
+                    if day_stocks.empty:
+                        logger.warning(f"⚠️ {d.date()} | Aucune donnée Action disponible ce jour.")
+                    else:
+                        # Diagnostic d'éligibilité
+                        n_total = len(day_stocks)
+                        n_eligible = day_stocks['Eligible'].sum()
+                        logger.info(f"🔎 {d.date()} | Éligibilité Stocks: {n_eligible} / {n_total}")
+                        
                         day_stocks['Rank'] = day_stocks['Momentum_XM'].rank(ascending=False)
                         # On garde ceux qui sont déjà en portefeuille s'ils sont dans le top buffer
                         kept = []
@@ -296,16 +285,25 @@ class RegimeSwitchingMomentumBacktester:
                             row = day_stocks[day_stocks['Ticker'] == p['Ticker']]
                             if not row.empty and row.iloc[0]['Rank'] <= self.config.get('buffer_n', 15):
                                 kept.append(p)
+                            else:
+                                logger.debug(f"♻️ {d.date()} | {p['Ticker']} sorti (Rank > Buffer)")
                         
                         # On complète jusqu'à top_n
                         needed = self.config.get('top_n', 10) - len(kept)
+                        logger.info(f"🎯 {d.date()} | Besoin de {needed} nouveaux stocks (Déjà {len(kept)} gardés)")
+                        
                         if needed > 0:
                             candidates = day_stocks[day_stocks['Eligible'] & (~day_stocks['Ticker'].isin([p['Ticker'] for p in kept]))]
+                            logger.info(f"💡 {d.date()} | Candidats éligibles et nouveaux: {len(candidates)}")
+                            
                             top_new = candidates.nlargest(needed, 'Momentum_XM')
                             for _, row in top_new.iterrows():
                                 kept.append({'Ticker': row['Ticker'], 'Weight': 0, 'Type': 'Stock'})
                         
                         current_portfolio = kept
+                        if not current_portfolio:
+                             logger.warning(f"❌ {d.date()} | Aucun stock sélectionné!")
+                        
                         if current_portfolio:
                             w = self.leverage / len(current_portfolio)
                             for p in current_portfolio: p['Weight'] = w
@@ -314,8 +312,13 @@ class RegimeSwitchingMomentumBacktester:
                     current_portfolio = [p for p in current_portfolio if p['Type'] == 'ETF']
                     cur_tickers = [p['Ticker'] for p in current_portfolio]
                     needed = 2 - len(current_portfolio)
+                    
+                    logger.info(f"🛡️ {d.date()} | Mode Bear: Recherche de {needed} ETFs...")
+                    
                     if needed > 0:
                         day_etfs = etfs[(etfs['Date'] == d) & (etfs['Eligible']) & (~etfs['Ticker'].isin(cur_tickers))]
+                        logger.info(f"🔎 {d.date()} | ETFs éligibles: {len(day_etfs)}")
+                        
                         top_etfs = day_etfs.nlargest(needed, 'Momentum_XM')
                         for _, row in top_etfs.iterrows():
                             current_portfolio.append({'Ticker': row['Ticker'], 'Weight': 0, 'Type': 'ETF'})
@@ -323,6 +326,8 @@ class RegimeSwitchingMomentumBacktester:
                     if current_portfolio:
                         w = 1.0 / len(current_portfolio)
                         for p in current_portfolio: p['Weight'] = w
+                    else:
+                        logger.warning(f"💸 {d.date()} | 100% Cash (Pas d'ETF éligible)")
 
             # Diagnostic journalier
             w_sum = sum(p['Weight'] for p in current_portfolio) if current_portfolio else 0.0
@@ -337,14 +342,14 @@ class RegimeSwitchingMomentumBacktester:
         if current_portfolio:
             final_tickers = [p['Ticker'] for p in current_portfolio]
             logger.info(f"🎯 Dernière Sélection ({d.date()}): {', '.join(final_tickers)}")
-            
+        
         return pd.DataFrame(portfolio_allocations).T.fillna(0)
 
     def generate_performance(self, allocations_df, etfs, stocks, sp500):
         if allocations_df.empty or sp500.empty: return pd.DataFrame()
             
         prices_etf = etfs.pivot(index='Date', columns='Ticker', values='Close') if not etfs.empty else pd.DataFrame()
-        prices_stocks = stocks.pivot(index='Date', columns='Ticker', values='AdjClose') if not stocks.empty else pd.DataFrame()
+        prices_stocks = stocks.pivot(index='Date', columns='Ticker', values='Close') if not stocks.empty else pd.DataFrame()
         all_prices = pd.concat([prices_etf, prices_stocks], axis=1)
         
         # --- DIAGNOSTIC ---

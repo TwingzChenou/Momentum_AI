@@ -1,0 +1,9 @@
+{
+  "expectations": [],
+  "id": "42eb218b-0166-453c-9310-5c06c58508f2",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "suite_sp500_gold",
+  "notes": null
+}

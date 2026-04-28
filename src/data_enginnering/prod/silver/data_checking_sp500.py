@@ -11,6 +11,27 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
 from config.config_spark import Paths
+import pyspark.sql.functions as F
+
+def standardize_columns(df):
+    """
+    Standardise les colonnes OHLCV : Standardise vers Close 
+    pour s'assurer que 'Close' contient toujours le prix ajusté.
+    """
+    cols = df.columns
+    # Si on a les deux, on dégage le Close brut pour garder l'ajusté
+    if "AdjClose" in cols and "Close" in cols:
+        df = df.drop("Close")
+    
+    if "AdjClose" in cols:
+        df = df.withColumnRenamed("AdjClose", "Close")
+        
+    # Normalisation case-insensitive si besoin (optionnel mais recommandé)
+    for c in df.columns:
+        if c.lower() == "adjclose" and "Close" not in df.columns:
+            df = df.withColumnRenamed(c, "Close")
+            
+    return df
 
 def run_data_checks(df, name="Silver Data"):
     """
@@ -23,40 +44,37 @@ def run_data_checks(df, name="Silver Data"):
     # 1. Doublons
     df_dedup = df.dropDuplicates(['Ticker', 'Date'])
     
-    # 2. Règles Métiers & Nulls
+    # 2. Règles Métiers & Nulls (On utilise 'Close' car c'est le standard après standardize_columns)
     all_null_condition = (
-        col("Open").isNull() & 
-        col("High").isNull() & 
-        col("Low").isNull() & 
-        col("Close").isNull() & 
-        col("AdjClose").isNull() & 
-        col("Volume").isNull()
+        F.col("Open").isNull() & 
+        F.col("High").isNull() & 
+        F.col("Low").isNull() & 
+        F.col("Close").isNull() & 
+        F.col("Volume").isNull()
     )
     
     none_null_condition = (
-        col("Open").isNotNull() & 
-        col("High").isNotNull() & 
-        col("Low").isNotNull() & 
-        col("Close").isNotNull() & 
-        col("AdjClose").isNotNull() & 
-        col("Volume").isNotNull()
+        F.col("Open").isNotNull() & 
+        F.col("High").isNotNull() & 
+        F.col("Low").isNotNull() & 
+        F.col("Close").isNotNull() & 
+        F.col("Volume").isNotNull()
     )
     
     positive_prices = (
-        (col("Open") > 0) & 
-        (col("High") > 0) & 
-        (col("Low") > 0) & 
-        (col("Close") > 0) & 
-        (col("AdjClose") > 0) & 
-        (col("Volume") >= 0)
+        (F.col("Open") > 0) & 
+        (F.col("High") > 0) & 
+        (F.col("Low") > 0) & 
+        (F.col("Close") > 0) & 
+        (F.col("Volume") >= 0)
     )
     
     logical_prices = (
-        (col("High") >= col("Low")) &
-        (col("High") >= col("Open")) &
-        (col("High") >= col("Close")) &
-        (col("Low") <= col("Open")) &
-        (col("Low") <= col("Close"))
+        (F.col("High") >= F.col("Low")) &
+        (F.col("High") >= F.col("Open")) &
+        (F.col("High") >= F.col("Close")) &
+        (F.col("Low") <= F.col("Open")) &
+        (F.col("Low") <= F.col("Close"))
     )
     
     valid_row = all_null_condition | (none_null_condition & positive_prices & logical_prices)
@@ -76,10 +94,14 @@ def process_bronze_to_silver(spark, bronze_path, silver_path, label):
     logger.info(f"📥 Loading Bronze: {bronze_path}")
     try:
         df_bronze = spark.read.format("delta").load(bronze_path)
-        df_silver = run_data_checks(df_bronze, name=label)
+        
+        # --- NOUVEAUTÉ : STANDARDISATION COLONNES ---
+        df_standard = standardize_columns(df_bronze)
+        
+        df_silver = run_data_checks(df_standard, name=label)
         
         logger.info(f"💾 Saving to Silver: {silver_path}")
-        df_silver.write.format("delta").mode("overwrite").save(silver_path)
+        df_silver.write.format("delta").mode("overwrite").option("overwriteSchema", "true").save(silver_path)
         logger.success(f"✅ Success {label}.")
 
     except Exception as e:

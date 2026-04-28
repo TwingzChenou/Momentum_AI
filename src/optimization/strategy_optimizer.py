@@ -28,19 +28,21 @@ def run_optimization(n_trials=50):
         # 1. Indice S&P 500 via Silver Weekly
         logger.info(f"📥 Chargement du S&P 500 depuis {Paths.DATA_RAW_SP500_WEEKLY_SILVER}")
         sp500_raw = spark.read.format("delta").load(Paths.DATA_RAW_SP500_WEEKLY_SILVER).toPandas()
-        sp500_raw['Date'] = pd.to_datetime(sp500_raw['Date']).dt.normalize()
-        sp500_raw = sp500_raw.set_index('Date').sort_index()
-        sp500_raw = sp500_raw.rename(columns={'AdjClose': 'Close'})
+        
+        if 'Date' in sp500_raw.columns:
+            sp500_raw['Date'] = pd.to_datetime(sp500_raw['Date']).dt.normalize()
+            sp500_raw = sp500_raw.set_index('Date').sort_index()
+            
+        sp500_raw = sp500_raw[~sp500_raw.index.duplicated(keep='last')]
+        sp500_raw = sp500_raw[['Close']]
         
         # 2. Données SILVER (Delta Lake)
         df_etf = spark.read.format("delta").load(Paths.DATA_RAW_ETF_WEEKLY_SILVER).toPandas()
-        df_stocks = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES_SILVER).toPandas()
+        df_stocks = spark.read.format("delta").load(Paths.DATA_RAW_2B_SILVER).toPandas()
 
-        # 3. Normalisation PascalCase
+        # 3. Normalisation Robuste
         for df in [df_etf, df_stocks]:
-            mapping = {'symbol': 'Ticker', 'ticker': 'Ticker', 'date': 'Date', 'adjclose': 'AdjClose', 'close': 'Close'}
-            cols_to_rename = {old: new for old, new in mapping.items() if old in df.columns and new not in df.columns}
-            df.rename(columns=cols_to_rename, inplace=True)
+            if df.empty: continue
             df['Date'] = pd.to_datetime(df['Date']).dt.normalize()
         
         # Lancement Optuna avec Sampler Bayésien (TPE)
@@ -89,7 +91,7 @@ def objective_silver(trial, sp500_raw, df_etf_raw, df_stocks_raw):
             etfs = df_etf_raw[['Ticker', 'Date', 'Close']].copy().sort_values(['Ticker', 'Date'])
 
             # 3. Stocks (Données brutes)
-            stocks = df_stocks_raw[['Ticker', 'Date', 'AdjClose']].copy().sort_values(['Ticker', 'Date'])
+            stocks = df_stocks_raw[['Ticker', 'Date', 'Close']].copy().sort_values(['Ticker', 'Date'])
 
             # 4. Simulation
             # Le moteur va lui-même calculer SMA, ADX, ATR et Eligible à chaque trial
@@ -115,7 +117,9 @@ def objective_silver(trial, sp500_raw, df_etf_raw, df_stocks_raw):
             return calmar if not np.isnan(calmar) else -1.0
 
     except Exception as e:
+        import traceback
         logger.error(f"❌ Erreur Trial : {e}")
+        logger.error(traceback.format_exc())
         gc.collect()
         return -1.0
 

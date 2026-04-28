@@ -516,7 +516,7 @@ if run_button or 'perf_df' in st.session_state:
                     if t == 'Cash': continue
                     if t in stocks_tickers_set:
                         p_df = df_stocks[df_stocks['Ticker'] == t]
-                        p_col = 'AdjClose'
+                        p_col = 'Close'
                     else:
                         p_df = df_etf[df_etf['Ticker'] == t]
                         p_col = 'Close'
