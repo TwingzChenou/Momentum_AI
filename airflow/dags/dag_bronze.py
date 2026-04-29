@@ -39,13 +39,24 @@ with DAG(
     tags=['prod', 'bronze', 'gx'],
 ) as dag:
 
-    # 1. Récupération de la liste des tickers
-    task_fetch_tickers = BashOperator(
+    # 1. Récupération de la liste des tickers (Multiple sources)
+    task_fetch_tickers_2b = BashOperator(
         task_id='fetch_tickers_2b',
         bash_command='python3 /opt/airflow/src/data_enginnering/prod/bronze/List_ticker_YF.py',
     )
 
-    # 2. Ingestion Parallèle
+    task_fetch_sp500_list = BashOperator(
+        task_id='fetch_sp500_list_fmp',
+        bash_command='python3 /opt/airflow/src/data_enginnering/prod/bronze/sp500_list_ingestion.py',
+    )
+
+    # 2. Consolidation de l'historique S&P 500 (Dépend de la liste FMP)
+    task_consolidate_history = BashOperator(
+        task_id='consolidate_sp500_history',
+        bash_command='python3 /opt/airflow/src/data_enginnering/prod/bronze/sp500_consolidated_history.py',
+    )
+
+    # 3. Ingestion Parallèle des prix
     task_ingest_stocks_2b = BashOperator(
         task_id='ingest_stocks_2b',
         bash_command='python3 /opt/airflow/src/data_enginnering/prod/bronze/data_raw_2b.py',
@@ -56,18 +67,23 @@ with DAG(
         bash_command='python3 /opt/airflow/src/data_enginnering/prod/bronze/data_raw_etfs.py',
     )
 
-    task_ingest_sp500 = BashOperator(
-        task_id='ingest_raw_sp500',
+    task_ingest_sp500_index = BashOperator(
+        task_id='ingest_sp500_index',
         bash_command='python3 /opt/airflow/src/data_enginnering/prod/bronze/data_raw_sp500.py',
     )
 
-    # 3. VALIDATION GREAT EXPECTATIONS
+    task_ingest_sp500_stocks = BashOperator(
+        task_id='ingest_sp500_stocks_daily',
+        bash_command='python3 /opt/airflow/src/data_enginnering/prod/bronze/sp500_prices_daily.py',
+    )
+
+    # 4. VALIDATION GREAT EXPECTATIONS
     task_validate_bronze = BashOperator(
         task_id='validate_bronze_data',
         bash_command='python3 /opt/airflow/scripts/validate_bronze.py',
     )
 
-    # 4. Trigger de la couche Silver
+    # 5. Trigger de la couche Silver
     trigger_silver = TriggerDagRunOperator(
         task_id='trigger_silver_layer',
         trigger_dag_id='02_prod_silver_processing',
@@ -75,4 +91,9 @@ with DAG(
     )
 
     # Dépendances
-    task_fetch_tickers >> [task_ingest_stocks_2b, task_ingest_etfs, task_ingest_sp500] >> task_validate_bronze >> trigger_silver
+    # Tickers -> History -> Stocks Daily
+    task_fetch_sp500_list >> task_consolidate_history >> task_ingest_sp500_stocks
+    
+    # Autres ingestions en parallèle
+    [task_fetch_tickers_2b, task_fetch_sp500_list]
+    [task_ingest_stocks_2b, task_ingest_etfs, task_ingest_sp500_index, task_ingest_sp500_stocks] >> task_validate_bronze >> trigger_silver

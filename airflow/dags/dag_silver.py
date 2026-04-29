@@ -55,6 +55,11 @@ with DAG(
         bash_command='python3 /opt/airflow/src/data_enginnering/prod/silver/data_checking_sp500.py',
     )
 
+    task_sp500_prices_weekly = BashOperator(
+        task_id='sp500_prices_weekly',
+        bash_command='python3 /opt/airflow/src/data_enginnering/prod/silver/sp500_prices_weekly.py',
+    )
+
     # 2. VALIDATION GREAT EXPECTATIONS
     task_validate_silver = BashOperator(
         task_id='validate_silver_data',
@@ -69,4 +74,4 @@ with DAG(
     )
 
     # Dépendances (Tout en parallèle avant de trigger la Gold)
-    [task_check_2b, task_check_etfs, task_check_sp500] >> task_validate_silver >> trigger_gold
+    [task_check_2b, task_check_etfs, task_check_sp500, task_sp500_prices_weekly] >> task_validate_silver >> trigger_gold

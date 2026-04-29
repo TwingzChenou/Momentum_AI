@@ -20,7 +20,7 @@ def main():
         df_silver = spark.read.format("delta").load(Paths.DATA_RAW_2B_WEEKLY_SILVER)
         
         if df_silver.isEmpty():
-            raise ValueError("❌ SP500_STOCK_PRICES_WEEKLY_SILVER table is empty!")
+            raise ValueError("❌ DATA_RAW_2B_WEEKLY_SILVER table is empty!")
             
         validate_df(df_silver, "silver_weekly_prices_suite")
         

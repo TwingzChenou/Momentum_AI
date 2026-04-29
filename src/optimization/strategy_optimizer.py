@@ -5,6 +5,7 @@ import mlflow
 import pandas as pd
 import numpy as np
 import gc
+import time
 from datetime import datetime
 from loguru import logger
 
@@ -19,16 +20,29 @@ MLFLOW_TRACKING_URI = "http://momentum-mlflow-server:5000" if os.getenv("DOCKER_
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment("Strategy_Optimization_Champion")
 
+def optuna_callback(study, trial):
+    if trial.number % 1 == 0:  # Log à chaque essai
+        logger.info(f"🧪 Essai {trial.number}/{study.user_attrs.get('total_trials')} | Score: {trial.value:.4f} | Meilleur: {study.best_value:.4f}")
+
 def run_optimization(n_trials=50):
-    logger.info(f"🚀 Démarrage de l'optimisation (n_trials={n_trials}) sur données SILVER...")
+    start_optim = time.time()
+    logger.info(f"🎬 Démarrage de l'Optimisation de Stratégie ({n_trials} essais)")
     
     spark = create_spark_session('Strategy_Optimizer_Silver')
     
     try:
-        # 1. Indice S&P 500 via Silver Weekly
-        logger.info(f"📥 Chargement du S&P 500 depuis {Paths.DATA_RAW_SP500_WEEKLY_SILVER}")
+        # 1. Chargement des données
+        logger.info("📥 Chargement des données Silver depuis le Data Lake...")
         sp500_raw = spark.read.format("delta").load(Paths.DATA_RAW_SP500_WEEKLY_SILVER).toPandas()
-        
+        df_etf = spark.read.format("delta").load(Paths.DATA_RAW_ETF_WEEKLY_SILVER).toPandas()
+        df_stocks = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES_WEEKLY_SILVER).toPandas()
+
+        # Statistiques
+        for df, label in [(df_etf, "ETFs"), (df_stocks, "Stocks")]:
+            if not df.empty:
+                df['Date'] = pd.to_datetime(df['Date']).dt.normalize()
+                logger.info(f"📊 {label} : {len(df)} lignes, {df['Ticker'].nunique()} actifs, de {df['Date'].min().date()} à {df['Date'].max().date()}")
+
         if 'Date' in sp500_raw.columns:
             sp500_raw['Date'] = pd.to_datetime(sp500_raw['Date']).dt.normalize()
             sp500_raw = sp500_raw.set_index('Date').sort_index()
@@ -38,7 +52,7 @@ def run_optimization(n_trials=50):
         
         # 2. Données SILVER (Delta Lake)
         df_etf = spark.read.format("delta").load(Paths.DATA_RAW_ETF_WEEKLY_SILVER).toPandas()
-        df_stocks = spark.read.format("delta").load(Paths.DATA_RAW_2B_SILVER).toPandas()
+        df_stocks = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES_WEEKLY_SILVER).toPandas()
 
         # 3. Normalisation Robuste
         for df in [df_etf, df_stocks]:

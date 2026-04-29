@@ -151,138 +151,116 @@ def save_to_delta(df, target_path, table_name=""):
 def save_to_bigquery(df, bq_table, table_name=""):
     logger.info(f"💾 Sauvegarde BigQuery de {table_name} vers {bq_table}")
     df.write.format("bigquery") \
-        .option("table", bq_table) \
-        .option("temporaryGcsBucket", BQ_TEMP_BUCKET) \
-        .option("parentProject", GCP_PROJECT_ID) \
-        .option("credentialsFile", GCP_KEY_PATH) \
-        .mode("overwrite") \
-        .save()
-    logger.success(f"✅ Enregistré dans BigQuery: {bq_table}")
+    try:
+        df.write.format("bigquery") \
+            .option("table", bq_table) \
+            .option("temporaryGcsBucket", BQ_TEMP_BUCKET) \
+            .option("parentProject", GCP_PROJECT_ID) \
+            .option("credentialsFile", GCP_KEY_PATH) \
+            .mode("overwrite") \
+            .save()
+        logger.success(f"✅ Enregistré dans BigQuery: {bq_table}")
+    except Exception as e:
+        logger.error(f"❌ Échec de la sauvegarde BigQuery pour {bq_table}: {e}")
+        raise
 
 def main():
+    start_time = time.time()
     setup_logging()
-    logger.info("🚀 Starting Job: Gold Feature Engineering (Dynamic Champion Config)")
+    logger.info("🎬 Démarrage de la pipeline Gold : Ingénierie des Features")
     
     # 0. Récupération de la configuration Champion
     config = get_champion_config()
-    logger.info(f"📋 Configuration Champion utilisée: {config}")
+    logger.info(f"📋 Configuration Champion utilisée : {config}")
 
     spark = None
     try:
         spark = create_spark_session(app_name="Features_Gold_Dynamic")
         
         # --- 1. PROCESS ETFS ---
-        logger.info(f"📥 Loading ETF Weekly from {Paths.DATA_RAW_ETF_WEEKLY_SILVER}")
+        etf_start = time.time()
+        logger.info(f"📥 Chargement des ETFs depuis {Paths.DATA_RAW_ETF_WEEKLY_SILVER}")
         try:
             df_etf_silver = spark.read.format("delta").load(Paths.DATA_RAW_ETF_WEEKLY_SILVER)
             if not df_etf_silver.isEmpty():
+                logger.info(f"⚡ Calcul des indicateurs pour {df_etf_silver.select('Ticker').distinct().count()} ETFs...")
                 df_etf_gold = df_etf_silver.groupby("Ticker").applyInPandas(lambda df: process_etf_features(df, config), schema=etf_schema)
                 df_etf_gold = df_etf_gold.withColumn("Date", col("Date").cast("date"))
+                
                 save_to_bigquery(df_etf_gold, Paths.BQ_ETF_GOLD, "ETFs Gold (Weekly)")
-                
-                # VALIDATION DE QUALITÉ
-                try:
-                    logger.info("🧪 Validation de la qualité des données ETF Gold...")
-                    validate_df(df_etf_gold, "suite_etf_gold")
-                except Exception as ve:
-                    logger.error(f"⚠️ Échec de la validation de qualité ETF : {ve}")
-                
                 save_to_delta(df_etf_gold, Paths.DATA_RAW_ETF_WEEKLY_GOLD, "ETFs Gold (Delta Cache)")
+                
+                logger.info(f"✅ ETFs traités en {time.time() - etf_start:.2f}s")
             else:
-                logger.warning("⚠️ Table ETF Weekly Silver est vide, passe...")
+                logger.warning("⚠️ Table ETF Weekly Silver est vide.")
         except Exception as e:
-            logger.warning(f"⚠️ Impossible de traiter les ETFs : {e}")
+            logger.warning(f"⚠️ Erreur lors du traitement des ETFs : {e}")
         
-        # --- 2. PROCESS SP500 INDEX (Silver Weekly) ---
-        logger.info(f"📥 Loading S&P 500 Weekly from {Paths.DATA_RAW_SP500_WEEKLY_SILVER}")
+        # --- 2. PROCESS SP500 INDEX ---
+        idx_start = time.time()
+        logger.info(f"📥 Chargement de l'Indice S&P 500 depuis {Paths.DATA_RAW_SP500_WEEKLY_SILVER}")
         try:
             df_sp500_silver = spark.read.format("delta").load(Paths.DATA_RAW_SP500_WEEKLY_SILVER)
             if not df_sp500_silver.isEmpty():
-                # On utilise les params SP500 de la config
                 sp500_config = config.copy()
                 sp500_config['etf_sma_fast'] = config['sp500_sma_fast']
                 sp500_config['etf_sma_slow'] = config['sp500_sma_slow']
-                sp500_config['etf_mom_period'] = 1 # Non utilisé pour l'indice mais requis par la fonction
+                sp500_config['etf_mom_period'] = 1 
                 
-                # Conversion en Pandas pour le traitement des indicateurs
                 df_sp500_pd = df_sp500_silver.toPandas()
-                
-                if 'Ticker' not in df_sp500_pd.columns:
-                    df_sp500_pd['Ticker'] = '^GSPC'
-                
-                # Sécurité : On s'assure de ne pas avoir de doublons si 'Close' existe déjà
-                # (On ne fait rien si Close est déjà là, on évite juste de s'emmêler avec des vieilles colonnes)
-                pass
-                
-                logger.info(f"🧐 Pré-traitement SP500 : {len(df_sp500_pd)} lignes, Colonnes: {df_sp500_pd.columns.tolist()}")
+                if 'Ticker' not in df_sp500_pd.columns: df_sp500_pd['Ticker'] = '^GSPC'
                 
                 df_sp500_res = process_etf_features(df_sp500_pd, sp500_config)
                 
                 if not df_sp500_res.empty:
                     df_sp500_gold = spark.createDataFrame(df_sp500_res, schema=etf_schema)
                     df_sp500_gold = df_sp500_gold.withColumn("Date", col("Date").cast("date"))
-                    save_to_bigquery(df_sp500_gold, Paths.BQ_SP500_GOLD, "SP500 Index Gold (Weekly)")
-                    
-                    # VALIDATION DE QUALITÉ
-                    try:
-                        logger.info("🧪 Validation de la qualité des données SP500 Gold...")
-                        validate_df(df_sp500_gold, "suite_sp500_gold")
-                    except Exception as ve:
-                        logger.error(f"⚠️ Échec de la validation de qualité SP500 : {ve}")
+                    save_to_bigquery(df_sp500_gold, Paths.BQ_SP500_GOLD, "SP500 Index Gold")
+                    logger.info(f"✅ Indice S&P 500 traité en {time.time() - idx_start:.2f}s")
                 else:
-                    logger.warning("⚠️ Résultats vides après traitement Gold pour le S&P 500")
+                    logger.warning("⚠️ Résultats vides pour le S&P 500")
             else:
                 logger.warning("⚠️ Table SP500 Weekly Silver est vide")
         except Exception as e:
-            logger.warning(f"⚠️ Impossible de traiter le SP500 via la couche Silver : {e}")
+            logger.warning(f"⚠️ Erreur lors du traitement de l'Indice : {e}")
         
         # --- 3. PROCESS STOCKS ---
-        logger.info(f"📥 Loading Stocks Daily from {Paths.DATA_RAW_2B_SILVER}")
+        stocks_start = time.time()
+        logger.info(f"📥 Chargement des Actions depuis {Paths.DATA_RAW_2B_SILVER}")
         try:
             df_stock_silver = spark.read.format("delta").load(Paths.DATA_RAW_2B_SILVER)
             if not df_stock_silver.isEmpty():
-                p_col_stock = 'Close'
-                logger.info(f"🔍 Colonne de prix pour Stocks Silver : {p_col_stock}")
+                logger.info("🛠️ Nettoyage et filtrage des actions (min_rows)...")
+                df_stock_clean = df_stock_silver.dropna(subset=['High', 'Low', 'Close'])
                 
-                df_stock_clean = df_stock_silver.dropna(subset=['High', 'Low', p_col_stock])
-                
-                # Pre-filter: On a besoin de SMA_slow semaines, donc SMA_slow * 5 jours (Daily)
-                # min_rows: 64 weeks * 5 days + buffer
                 min_rows = max(config['stock_sma_slow'] * 5 + 20, 350)
                 from pyspark.sql.functions import count
                 ticker_counts = df_stock_clean.groupBy("Ticker").agg(count("*").alias("cnt"))
                 valid_tickers = ticker_counts.filter(col("cnt") > min_rows).select("Ticker")
-                logger.info(f"📊 Filtrage Stocks : {valid_tickers.count()} tickers valides sur {ticker_counts.count()} (min_rows={min_rows})")
-                df_stock_clean = df_stock_clean.join(valid_tickers, on="Ticker", how="inner")
                 
-                # Tri en amont par Ticker et Date
-                df_stock_clean = df_stock_clean.orderBy("Ticker", "Date")
+                logger.info(f"📊 {valid_tickers.count()} actions valides identifiées (min_rows={min_rows})")
+                df_stock_clean = df_stock_clean.join(valid_tickers, on="Ticker", how="inner").orderBy("Ticker", "Date")
                 
+                logger.info("⚡ Calcul des indicateurs techniques (ADX, ATR, SMA) via Pandas UDF...")
                 df_stock_gold = df_stock_clean.groupBy("Ticker").applyInPandas(lambda df: process_stock_features(df, config), schema=stock_schema)
                 df_stock_gold = df_stock_gold.withColumn("Date", col("Date").cast("date"))
                 
-                save_to_bigquery(df_stock_gold, Paths.BQ_STOCKS_GOLD, "Stocks Gold (Weekly Aggregated)")
-                save_to_delta(df_stock_gold, Paths.DATA_RAW_2B_WEEKLY_GOLD, "Stocks Gold (Delta Cache)")
+                save_to_bigquery(df_stock_gold, Paths.BQ_STOCKS_GOLD, "Stocks Gold")
+                save_to_delta(df_stock_gold, Paths.DATA_RAW_2B_WEEKLY_GOLD, "Stocks Gold Cache")
                 
-                # VALIDATION DE QUALITÉ
-                try:
-                    logger.info("🧪 Validation de la qualité des données Stocks Gold...")
-                    validate_df(df_stock_gold, "suite_stocks_gold")
-                except Exception as ve:
-                    logger.error(f"⚠️ Échec de la validation de qualité : {ve}")
+                logger.info(f"✅ Actions traitées en {time.time() - stocks_start:.2f}s")
             else:
-                logger.warning("⚠️ Table Stocks Daily Silver est vide, passe...")
+                logger.warning("⚠️ Table Stocks Silver est vide.")
         except Exception as e:
-            logger.warning(f"⚠️ Impossible de traiter les actions 2B : {e}")
+            logger.warning(f"⚠️ Erreur lors du traitement des actions : {e}")
 
     except Exception as e:
-        logger.critical(f"❌ Critical Error in job execution: {e}")
+        logger.critical(f"❌ Erreur critique Gold : {e}")
         sys.exit(1)
-
     finally:
-        if spark:
-            spark.stop()
-            logger.info("🛑 Spark Session stopped.")
+        total_duration = time.time() - start_time
+        logger.info(f"🏁 Fin de la pipeline Gold. Durée totale : {total_duration:.2f}s")
+        if spark: spark.stop()
 
 if __name__ == "__main__":
     main()

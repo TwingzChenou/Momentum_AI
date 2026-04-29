@@ -1,82 +1,68 @@
-# Momentum AI: Regime-Switching Strategy with Optuna & MLflow
+# 🚀 Momentum AI: Algorithmic Strategy with Optuna & MLflow
 
-Momentum AI is an advanced algorithmic trading platform designed to execute a **regime-switching momentum strategy**. It dynamically allocates capital between S&P 500 stocks and defensive ETFs based on market conditions, optimized using Bayesian search and tracked via industrial-grade MLOps tools.
-
-## 🎯 Project Goal
-
-The primary objective of this project is to outperform the S&P 500 benchmark by:
-1.  **Exploiting Momentum**: Selecting the top-performing assets in a bullish market.
-2.  **Regime Switching**: Automatically shifting to defensive ETFs or Cash when the broader market (S&P 500) shows signs of weakness (Bear regime).
-3.  **Automated Optimization**: Using machine learning (Optuna) to find the best possible hyperparameters (SMA windows, ADX thresholds, momentum periods) to maximize the Calmar.
+Momentum AI est une plateforme de trading algorithmique avancée conçue pour exécuter une **stratégie de momentum à changement de régime**. Elle alloue dynamiquement du capital entre les actions du S&P 500 et des ETFs défensifs, optimisée par recherche Bayésienne et monitorée via MLflow.
 
 ---
 
-## 🏗️ Architecture & Tech Stack
+## 🌟 Nouveautés & Améliorations Récentes
 
-The project follows a modern data engineering and MLOps architecture:
-
--   **Data Storage**: Google BigQuery (organized in Bronze, Silver, and Gold layers).
--   **Processing**: Apache Spark (PySpark) for distributed data transformation and feature engineering.
--   **Optimization Engine**: Optuna for Bayesian hyperparameter optimization.
--   **Experiment Tracking**: MLflow for logging trials, parameters, and versioning the "Champion" model.
--   **Orchestration**: Apache Airflow (Dockerized) for automated weekly data updates and re-optimization.
--   **Dashboard**: Streamlit for real-time backtest visualization and performance monitoring.
+-   **🌐 Pont Réseau Docker-Hôte** : Intégration transparente entre le dashboard Streamlit (Docker) et le serveur MLflow (Mac) via `host.docker.internal`.
+-   **📈 Profondeur Historique** : Extension de l'ingestion des données Bronze jusqu'au **1er janvier 2025**, offrant un recul critique pour les backtests.
+-   **🛡️ Observabilité Totale** : Instrumentation complète de la pipeline (Bronze, Silver, Gold, Optimisation) avec `loguru` (tracking du temps d'exécution, volumétrie des données et alertes de qualité).
+-   **🏆 Sélection Automatique du Champion** : Algorithme de recherche intelligent identifiant le dernier bilan d'optimisation (`Opt_...`) parmi des milliers d'essais techniques.
 
 ---
 
-## ⚙️ How It Works
+## 🏗️ Architecture & Stack Technique
 
-### 1. Data Pipeline (Medallion Architecture)
-*   **Bronze**: Raw data from Yahoo Finance (Stocks, ETFs, S&P 500).
-*   **Silver**: Cleaned and normalized daily data.
-*   **Gold**: Weekly aggregated features including SMA (Simple Moving Averages), ADX (Trend Strength), and ATR (Volatility).
-
-### 2. Strategy Logic
-The core engine (`backtest_engine.py`) follows these rules:
-*   **Market Regime**: If S&P 500 Price > SMA_slow and SMA_fast > SMA_slow, the market is in a **Bull** regime.
-*   **Bull Strategy**: Invests in the **Top 10** stocks with the highest momentum, filtered by ADX (strength) and ATR (volatility).
-*   **Bear Strategy**: Invests in **Top 2** defensive ETFs (e.g., Gold, Treasury Bonds) or stays in **Cash**.
-*   **Stop-Loss**: Daily/Weekly monitoring of the price relative to the SMA_slow to exit individual positions early.
-
-### 3. Optimization Loop
-The `strategy_optimizer.py` script runs an Optuna study:
-*   It explores 11+ hyperparameters (e.g., SMA windows from 5 to 75 days).
-*   Each trial runs a full historical backtest.
-*   The best performing set of parameters is promoted as the **Champion** in MLflow.
+-   **Data Storage** : Google BigQuery (Architecture Medallion : Bronze, Silver, Gold).
+-   **Processing** : Apache Spark (PySpark) pour les transformations distribuées.
+-   **Optimization Engine** : Optuna (TPE Sampler) pour la recherche d'hyperparamètres.
+-   **Experiment Tracking** : MLflow pour le versioning du modèle "Champion" et le suivi des essais.
+-   **Orchestration** : Apache Airflow pour l'automatisation hebdomadaire.
+-   **Dashboard** : Streamlit pour la visualisation des performances et le backtest interactif.
 
 ---
 
-## 🚀 Getting Started
+## ⚙️ Fonctionnement de la Pipeline
 
-### Prerequisites
-*   Docker & Docker-Compose
-*   Google Cloud Platform (GCP) Credentials for BigQuery
+### 1. Pipeline de Données (Medallion)
+*   **Bronze** : Ingestion incrémentielle via Yahoo Finance pour les 503 membres actuels de l'index. **Début : 01/01/2025**.
+*   **Silver** : Agrégation hebdomadaire (W-FRI) et filtrage strict basé sur les périodes d'inclusion historique dans le S&P 500.
+*   **Gold** : Calcul des indicateurs techniques avancés (SMA, ADX, ATR) stockés dans BigQuery.
+
+### 2. Logique de Stratégie
+*   **Régime Bull** : Investissement dans le **Top N** des actions ayant le meilleur momentum, filtrées par volatilité (ATR) et force de tendance (ADX).
+*   **Régime Bear** : Bascule automatique vers des ETFs de couverture (Or, Obligations) ou mise en Cash.
+
+### 3. Observabilité & Logs
+Chaque tâche est monitorée en temps réel. Exemple de log généré :
+```bash
+2026-04-29 13:45:00 | INFO    | 📋 503 tickers nécessitent une mise à jour.
+2026-04-29 13:45:10 | SUCCESS | 💾 Sauvegarde terminée avec succès en 12.45s
+2026-04-29 13:45:11 | INFO    | 🧪 Essai 15/50 | Score: 0.9142 | Meilleur: 0.9250
+```
+
+---
+
+## 🚀 Démarrage Rapide
 
 ### Installation
-1.  Clone the repository.
-2.  Configure your environment variables in `.env`.
-3.  Start the infrastructure:
+1.  **Configuration** : Remplissez votre fichier `.env` avec vos accès GCP et MLflow.
+2.  **Lancement de l'infrastructure** :
     ```bash
     docker-compose up -d
     ```
+3.  **Lancement du Dashboard** : Accédez à `http://localhost:8501`.
 
-### Running a Backtest
-Access the Streamlit Dashboard (usually at `http://localhost:8501`) to:
-*   Load the latest **Champion** config from MLflow.
-*   Run a simulation on historical data.
-*   Visualize Equity curves, Drawdowns, and Portfolio composition.
-
----
-
-## 📊 Key Metrics Tracked
-*   **CAGR**: Compound Annual Growth Rate.
-*   **Max Drawdown**: The largest peak-to-trough decline.
-*   **Sharpe Ratio**: Risk-adjusted return.
-*   **Calmar Ratio**: Annual return relative to max drawdown (the primary optimization metric).
+### Utilisation du Dashboard
+-   Le bouton **"Load Champion Config"** interroge MLflow pour récupérer les meilleurs paramètres (SMA, Momentum, etc.) trouvés par la dernière DAG d'optimisation.
+-   Lancez la simulation pour visualiser la courbe d'équité, le Max Drawdown et le Ratio de Calmar.
 
 ---
 
-## 🛠️ Maintenance & Automation
-The project includes Airflow DAGs to automate the entire lifecycle:
-*   `dag_silver`: Weekly data ingestion and cleaning.
-*   `strategy_optimization_weekly`: Automated re-tuning of the strategy every weekend to adapt to new market conditions.
+## 📊 Métriques Clés d'Optimisation
+*   **CAGR** : Taux de croissance annuel composé.
+*   **Max Drawdown** : La perte maximale historique.
+*   **Ratio de Calmar** : Notre métrique cible (CAGR / Max Drawdown).
+*   **Sharpe Ratio** : Performance ajustée au risque.

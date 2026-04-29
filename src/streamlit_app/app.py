@@ -192,11 +192,11 @@ def load_and_prep_all_data(start_date_str, config_dict):
     
     return df_sp500, df_etf, df_stocks
 
-@st.cache_data(show_spinner="🔍 Recherche du meilleur modèle dans MLFlow...", ttl=10)
 def load_champion_config():
     config = get_champion_config()
-    if 'calmar' in config: # Optionnel: log d'info si présent
-         st.sidebar.success("🏆 Meilleur Run chargé depuis MLFlow")
+    if 'calmar' in config:
+         run_info = f" ({config.get('run_name', '')})" if 'run_name' in config else ""
+         st.sidebar.success(f"🏆 Stratégie chargée : {run_info}")
     return config
 
 @st.cache_data(show_spinner="🧠 Calcul de l'Intelligence Financière en cours...", ttl=300)
@@ -279,8 +279,7 @@ st.markdown('<h1 class="main-title">Momentum AI</h1>', unsafe_allow_html=True)
 if run_button or 'perf_df' in st.session_state:
     try:
         config = load_champion_config()
-            
-        st.sidebar.success(f"✅ Modèle MLFlow 'Champion' chargé")
+        st.sidebar.success(f"🏆 Stratégie 'Champion' chargée depuis MLflow")
         
         with st.sidebar.expander("🧠 Détails de la Stratégie"):
             st.markdown(f"**Sélection :** Top {config['top_n']} actifs")

@@ -80,6 +80,7 @@ class Paths:
 
     DATA_RAW_2B_SILVER = f"{SILVER}/data_raw_2b"
     DATA_RAW_2B_WEEKLY_SILVER = f"{SILVER}/data_raw_2b_weekly"
+    SP500_STOCK_PRICES_WEEKLY_SILVER = f"{SILVER}/sp500_stock_prices_weekly"
     DATA_RAW_2B_MONTHLY_SILVER = f"{SILVER}/data_raw_2b_monthly"
     DATA_RAW_ETF_SILVER = f"{SILVER}/data_raw_etf"
     DATA_RAW_ETF_WEEKLY_SILVER = f"{SILVER}/data_raw_etf_weekly"
