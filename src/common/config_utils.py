@@ -10,8 +10,16 @@ def get_champion_config(experiment_name="Strategy_Optimization_Champion"):
     """
     try:
         # Configuration de l'URI (Adaptation automatique Docker vs Local)
-        # host.docker.internal permet au container Streamlit de joindre le MLflow du Mac
-        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://host.docker.internal:5001")
+        # 1. Priorité à la variable d'environnement (définie dans docker-compose ou shell)
+        # 2. Détection du container via /.dockerenv
+        # 3. Fallback sur localhost:5001
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI")
+        if not mlflow_uri:
+            if os.path.exists("/.dockerenv") or os.getenv("DOCKER_ENV") == "true":
+                mlflow_uri = "http://mlflow:5000"
+            else:
+                mlflow_uri = "http://localhost:5001"
+                
         mlflow.set_tracking_uri(mlflow_uri)
         
         # 1. Accès aux expériences
