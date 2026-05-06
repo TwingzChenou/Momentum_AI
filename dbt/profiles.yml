@@ -1,0 +1,13 @@
+momentum_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'momentum_data.duckdb'
+      # Configurer DuckDB pour accéder à GCS via httpfs
+      settings:
+        s3_endpoint: 'storage.googleapis.com'
+        s3_access_key_id: "{{ env_var('GCS_ACCESS_KEY_ID', '') }}"
+        s3_secret_access_key: "{{ env_var('GCS_SECRET_ACCESS_KEY', '') }}"
+        s3_region: 'us-east-1' # Google Cloud ne l'utilise pas vraiment mais c'est requis
+        s3_url_style: 'path'

@@ -21,6 +21,7 @@ def get_incremental_tasks(spark):
     - Start date is at least March 19, 2026.
     """
     logger.info(f"📡 Calculating incremental tasks (STRICT: 503 Current Members)...")
+    today = datetime.today().date()
     
     # 1. Load Current Members List
     df_latest = spark.read.format("delta").load(Paths.SP500_LATEST_TICKERS).select(F.col("symbol").alias("Ticker"))
@@ -105,6 +106,7 @@ def main():
     
     try:
         # 1. Identify what needs to be downloaded
+        logger.info("🔍 Étape 1 : Identification des données manquantes (Incrémental)...")
         tasks = get_incremental_tasks(spark)
         
         if not tasks:
@@ -114,6 +116,7 @@ def main():
         logger.info(f"📋 {len(tasks)} tickers nécessitent une mise à jour.")
         
         # 2. Fetch Data
+        logger.info("🌐 Étape 2 : Téléchargement des données depuis Yahoo Finance...")
         fetch_start = time.time()
         df_new = fetch_yf_data_incremental(tasks)
         fetch_duration = time.time() - fetch_start
@@ -125,31 +128,46 @@ def main():
         logger.info(f"📊 Téléchargement terminé : {len(df_new)} lignes récupérées en {fetch_duration:.2f}s")
         
         # 3. Préparation des données
-        logger.info("🛠️ Alignement du schéma sur le standard CamelCase...")
+        logger.info("🛠️ Étape 3 : Transformation et Standardisation des colonnes...")
         final_df = pd.DataFrame()
-        final_df['symbol'] = df_new['Ticker'] if 'Ticker' in df_new.columns else df_new['symbol']
-        final_df['date'] = pd.to_datetime(df_new['Date'] if 'Date' in df_new.columns else df_new['date']).dt.date
-        final_df['adjOpen'] = df_new['Open']
-        final_df['adjHigh'] = df_new['High']
-        final_df['adjLow'] = df_new['Low']
-        final_df['adjClose'] = df_new['Adj Close'] if 'Adj Close' in df_new.columns else df_new['Close']
-        final_df['volume'] = df_new['Volume']
         
+        # Mapping robuste des colonnes
+        final_df['Ticker'] = df_new['Ticker'] if 'Ticker' in df_new.columns else df_new['symbol']
+        final_df['Date'] = pd.to_datetime(df_new['Date'] if 'Date' in df_new.columns else df_new['date']).dt.date
+        final_df['Open'] = df_new['Open']
+        final_df['High'] = df_new['High']
+        final_df['Low'] = df_new['Low']
+        final_df['Close'] = df_new['Close']
+        final_df['AdjClose'] = df_new['Adj Close'] if 'Adj Close' in df_new.columns else df_new['Close']
+        final_df['Volume'] = df_new['Volume']
+        
+        logger.info(f"✨ Colonnes standardisées : {list(final_df.columns)}")
+        
+        logger.info("🚀 Conversion du DataFrame Pandas en Spark...")
         sdf_new = spark.createDataFrame(final_df)
         
         # 4. Sauvegarde avec Merge (pour éviter les doublons)
         from delta.tables import DeltaTable
         save_start = time.time()
         if DeltaTable.isDeltaTable(spark, Paths.SP500_STOCK_PRICES):
-            logger.info(f"🔄 Upsert en cours via Delta Merge dans {Paths.SP500_STOCK_PRICES}...")
-            dt = DeltaTable.forPath(spark, Paths.SP500_STOCK_PRICES)
+            # Vérifier si la table existante utilise l'ancien schéma (symbol/adjClose)
+            existing_cols = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES).columns
+            logger.info(f"🔎 Colonnes existantes dans la table Delta : {existing_cols}")
             
-            dt.alias("old").merge(
-                sdf_new.alias("new"),
-                "old.symbol = new.symbol AND old.date = new.date"
-            ).whenNotMatchedInsertAll().execute()
+            if "symbol" in existing_cols or "Ticker" not in existing_cols:
+                logger.warning("⚠️ Ancien schéma détecté (symbol/adjClose). Migration vers le nouveau schéma (Ticker/Close)...")
+                logger.info(f"🔄 Réécriture complète de la table : {Paths.SP500_STOCK_PRICES}")
+                sdf_new.write.format("delta").mode("overwrite").option("overwriteSchema", "true").save(Paths.SP500_STOCK_PRICES)
+                logger.success("✅ Migration du schéma terminée avec succès.")
+            else:
+                logger.info(f"🔄 Étape 4 : Upsert (Merge) dans la table Delta : {Paths.SP500_STOCK_PRICES}")
+                dt = DeltaTable.forPath(spark, Paths.SP500_STOCK_PRICES)
+                dt.alias("old").merge(
+                    sdf_new.alias("new"),
+                    "old.Ticker = new.Ticker AND old.Date = new.Date"
+                ).whenNotMatchedInsertAll().execute()
         else:
-            logger.info(f"🆕 Création de la table Delta : {Paths.SP500_STOCK_PRICES}")
+            logger.info(f"🆕 Étape 4 : Création initiale de la table Delta : {Paths.SP500_STOCK_PRICES}")
             sdf_new.write.format("delta").mode("overwrite").save(Paths.SP500_STOCK_PRICES)
         
         save_duration = time.time() - save_start
@@ -157,6 +175,8 @@ def main():
 
     except Exception as e:
         logger.critical(f"❌ Erreur critique lors de l'exécution : {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         sys.exit(1)
     finally:
         total_duration = time.time() - start_time

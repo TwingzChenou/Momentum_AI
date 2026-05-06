@@ -54,9 +54,21 @@ def main():
         
         try:
             sdf_existing = spark.read.format("delta").load(Paths.SP500_LIST_TICKERS)
-            # Full outer join to keep all historical events and add latest metadata
-            # We select specific columns from latest to avoid name collisions if necessary
-            sdf_final = sdf_existing.join(
+            
+            # To avoid duplicate columns after join, we rename columns from existing if they exist in latest
+            # or we just select only what we need from existing (like historical columns not in latest)
+            # For simplicity, let's just use sdf_latest as the source of truth for metadata 
+            # and only keep 'symbol' from existing to perform the join if we wanted to find removed tickers.
+            # But here, we want to enrich. 
+            
+            # Better approach: Drop metadata columns from existing before join to avoid duplicates
+            cols_to_drop = ["name", "sector", "subSector", "subsector", "dateFirstAdded", "datefirstadded"]
+            existing_clean = sdf_existing
+            for c in cols_to_drop:
+                if c in sdf_existing.columns:
+                    existing_clean = existing_clean.drop(c)
+            
+            sdf_final = existing_clean.join(
                 sdf_latest.select("symbol", "name", "sector", "subSector", "dateFirstAdded"), 
                 on="symbol", 
                 how="full"

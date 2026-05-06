@@ -1,5 +1,6 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from datetime import datetime, timedelta
 import os
 import sys
@@ -31,7 +32,7 @@ with DAG(
     'strategy_optimization_weekly',
     default_args=default_args,
     description='Optimisation hebdomadaire de la stratégie Momentum via Optuna et MLFlow',
-    schedule_interval='@weekly', 
+    schedule_interval=None,
     catchup=False,
     max_active_runs=1,
     tags=['momentum', 'optimization', 'mlflow'],
@@ -42,9 +43,10 @@ with DAG(
         python_callable=run_optuna_optimization,
     )
 
-    gold_task = BashOperator(
-        task_id='update_gold_features_bigquery',
-        bash_command='export PYTHONPATH=$PYTHONPATH:/opt/airflow && python3 /opt/airflow/src/data_enginnering/prod/gold/features_2b_etf.py',
+    trigger_gold = TriggerDagRunOperator(
+        task_id='trigger_gold_layer',
+        trigger_dag_id='03_prod_gold_features',
+        wait_for_completion=False,
     )
 
-    optimize_task >> gold_task
+    optimize_task >> trigger_gold

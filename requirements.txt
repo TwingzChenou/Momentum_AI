@@ -24,5 +24,6 @@ pyarrow
 mlflow
 joblib
 optuna
-great-expectations
 google-cloud-storage
+dbt-spark[session]>=1.5.0
+dbt-core

@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: stg_stock_prices_silver
+    description: "Nettoyage final et typage de la couche Silver"
+    columns:
+      - name: Ticker
+        tests:
+          - not_null
+      - name: Date
+        tests:
+          - not_null
+      - name: High
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= Low"
+          - dbt_utils.expression_is_true:
+              expression: ">= Open"
+          - dbt_utils.expression_is_true:
+              expression: ">= Close"
+      - name: Low
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "<= Open"
+          - dbt_utils.expression_is_true:
+              expression: "<= Close"

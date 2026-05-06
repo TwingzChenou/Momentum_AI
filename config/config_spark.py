@@ -64,7 +64,6 @@ class Paths:
 
     # Specific Tables SILVER
     SP500_CONSOLIDATED_HISTORY = f"{SILVER}/sp500_consolidated_history"
-    SP500_STOCK_PRICES_SILVER = f"{SILVER}/sp500_stock_prices"
     SP500_INCOME_STATEMENT_SILVER = f"{SILVER}/sp500_income_statement"
     SP500_BALANCE_SHEET_SILVER = f"{SILVER}/sp500_balance_sheet"
     SP500_CASH_FLOW_SILVER = f"{SILVER}/sp500_cash_flow"
@@ -78,16 +77,23 @@ class Paths:
     SP500_FINANCIAL_STATEMENT_GROWTH_SILVER = f"{SILVER}/sp500_financial_statement_growth"
     SP500_EARNINGS_SURPRISE_SILVER = f"{SILVER}/sp500_earnings_surprise"
 
-    DATA_RAW_2B_SILVER = f"{SILVER}/data_raw_2b"
+    # Standardized Silver Paths (Daily, Weekly, Monthly)
+    DATA_RAW_2B_DAILY_SILVER = f"{SILVER}/data_raw_2b"
     DATA_RAW_2B_WEEKLY_SILVER = f"{SILVER}/data_raw_2b_weekly"
-    SP500_STOCK_PRICES_WEEKLY_SILVER = f"{SILVER}/sp500_stock_prices_weekly"
     DATA_RAW_2B_MONTHLY_SILVER = f"{SILVER}/data_raw_2b_monthly"
-    DATA_RAW_ETF_SILVER = f"{SILVER}/data_raw_etf"
+    
+    DATA_RAW_ETF_DAILY_SILVER = f"{SILVER}/data_raw_etf"
     DATA_RAW_ETF_WEEKLY_SILVER = f"{SILVER}/data_raw_etf_weekly"
     DATA_RAW_ETF_MONTHLY_SILVER = f"{SILVER}/data_raw_etf_monthly"
-    DATA_RAW_SP500_SILVER = f"{SILVER}/data_raw_sp500"
+    
+    DATA_RAW_SP500_DAILY_SILVER = f"{SILVER}/data_raw_sp500"
     DATA_RAW_SP500_WEEKLY_SILVER = f"{SILVER}/data_raw_sp500_weekly"
     DATA_RAW_SP500_MONTHLY_SILVER = f"{SILVER}/data_raw_sp500_monthly"
+
+    SP500_STOCK_PRICES_SILVER = f"{SILVER}/sp500_stock_prices"
+    SP500_STOCK_PRICES_WEEKLY_SILVER = f"{SILVER}/sp500_stock_prices_weekly"
+    SP500_STOCK_PRICES_MONTHLY_SILVER = f"{SILVER}/sp500_stock_prices_monthly"
+    
     
     # Specific Tables GOLD
     SP500_STOCK_PRICES_GOLD = f"{GOLD}/sp500_stock_prices"
@@ -103,6 +109,11 @@ class Paths:
     SP500_MOMENTUM_VALUE_PROFITABLE_CRASH_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_value_profitable_crash_weekly"
     SP500_MOMENTUM_VALUE_PROFITABLE_GROWTH_CRASH_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_value_profitable_growth_crash_weekly"
     SP500_MOMENTUM_VALUE_PROFITABLE_GROWTH_SURPRISE_CRASH_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_value_profitable_growth_surprise_crash_weekly"
+    
+    # Gold Features (utilisés par dbt)
+    STOCK_FEATURES_GOLD = f"{GOLD}/stock_features"
+    ETF_FEATURES_GOLD = f"{GOLD}/etf_features"
+    INDEX_FEATURES_GOLD = f"{GOLD}/sp500_index_features"
     
     # --- BIGQUERY TABLES ---
     BQ_ETF_GOLD = f"{GCP_PROJECT_ID}.{BQ_DATASET}.etf_gold"

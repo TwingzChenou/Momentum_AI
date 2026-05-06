@@ -1,0 +1,33 @@
+version: 2
+
+sources:
+  - name: gcs_raw
+    schema: gcs_raw
+    description: "Données brutes stockées dans GCS (Delta Lake)"
+    tables:
+      - name: sp500_stock_prices
+      - name: data_raw_2b
+      - name: data_raw_etf
+      - name: data_raw_sp500
+
+  - name: gcs_silver
+    schema: default
+    description: "Modèles dbt de la couche Silver (Daily Clean)"
+    tables:
+      - name: stg_2b_prices_daily
+      - name: stg_etf_prices_daily
+      - name: stg_sp500_index_daily
+      - name: stg_sp500_stocks_daily
+
+  - name: gcs_silver_ext
+    schema: gcs_silver
+    description: "Tables Silver rééchantillonnées (Weekly/Monthly)"
+    tables:
+      - name: data_raw_2b_weekly
+      - name: data_raw_2b_monthly
+      - name: data_raw_etf_weekly
+      - name: data_raw_etf_monthly
+      - name: data_raw_sp500_weekly
+      - name: data_raw_sp500_monthly
+      - name: sp500_stock_prices_weekly
+      - name: sp500_stock_prices_monthly

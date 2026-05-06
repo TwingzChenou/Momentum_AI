@@ -9,8 +9,6 @@ services:
       test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 5s
       retries: 5
-    networks:
-      - project_momentum_ai_default
 
   airflow-webserver:
     build:
@@ -29,7 +27,7 @@ services:
       - ../config:/opt/airflow/config
       - ../data:/opt/airflow/data
       - ../scripts:/opt/airflow/scripts
-      - ../gx_workspace:/opt/airflow/gx_workspace
+      - ../dbt:/opt/airflow/dbt
       - ../.env:/opt/airflow/.env
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -40,8 +38,6 @@ services:
       - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED
       - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/keys_gcp/finance-ml-project-486410-f5aa9a641051.json
       - DOCKER_ENV=true
-    networks:
-      - project_momentum_ai_default
     restart: always
 
   airflow-scheduler:
@@ -59,7 +55,7 @@ services:
       - ../config:/opt/airflow/config
       - ../data:/opt/airflow/data
       - ../scripts:/opt/airflow/scripts
-      - ../gx_workspace:/opt/airflow/gx_workspace
+      - ../dbt:/opt/airflow/dbt
       - ../.env:/opt/airflow/.env
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -70,8 +66,6 @@ services:
       - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED
       - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/keys_gcp/finance-ml-project-486410-f5aa9a641051.json
       - DOCKER_ENV=true
-    networks:
-      - project_momentum_ai_default
     restart: always
 
   airflow-init:
@@ -80,8 +74,6 @@ services:
       dockerfile: airflow/Dockerfile
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
-    networks:
-      - project_momentum_ai_default
     depends_on:
       - postgres
     entrypoint: /bin/bash
@@ -97,6 +89,3 @@ services:
           --email admin@admin.com \
           --password admin
 
-networks:
-  project_momentum_ai_default:
-    external: true

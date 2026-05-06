@@ -1,3 +1,6 @@
+include:
+  - path: airflow/docker-compose.yaml
+
 services:
   momentum-app:
     build: .
@@ -20,6 +23,7 @@ services:
       - mlflow
     # Relancer automatiquement si crash
     restart: unless-stopped
+
   mlflow:
     build: .
     container_name: momentum-mlflow-server
@@ -32,6 +36,23 @@ services:
     command: >
       mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/mlruns --allowed-hosts '*'
     restart: unless-stopped
+
+  dbt:
+    build:
+      context: .
+      dockerfile: dbt/Dockerfile
+    container_name: momentum-dbt-runner
+    volumes:
+      - .:/app
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env
+    environment:
+      - DBT_PROFILES_DIR=/app/dbt
+    tty: true
+    entrypoint: /bin/bash
+    command: -c "tail -f /dev/null"
 
 volumes:
   mlflow_data:
