@@ -1,23 +1,13 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-from datetime import datetime, timedelta
+from utils.config import DEFAULT_ARGS
 import os
 import sys
 
 # Ajout du chemin projet pour les imports (Airflow utilise /opt/airflow)
 PROJECT_DIR = "/opt/airflow"
 sys.path.append(PROJECT_DIR)
-
-default_args = {
-    'owner': 'momentum_ai',
-    'depends_on_past': False,
-    'start_date': datetime(2026, 4, 1),
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
-}
 
 from airflow.operators.bash import BashOperator
 
@@ -30,7 +20,7 @@ def run_optuna_optimization():
 
 with DAG(
     'strategy_optimization_weekly',
-    default_args=default_args,
+    default_args=DEFAULT_ARGS,
     description='Optimisation hebdomadaire de la stratégie Momentum via Optuna et MLFlow',
     schedule_interval=None,
     catchup=False,
