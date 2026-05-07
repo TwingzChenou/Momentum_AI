@@ -62,39 +62,39 @@ with DAG(
     # 1. Récupération de la liste des tickers
     task_fetch_tickers_2b = BashOperator(
         task_id='fetch_tickers_2b',
-        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_enginnering/prod/bronze/List_ticker_YF.py',
+        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/List_ticker_YF.py',
     )
 
     task_fetch_sp500_list = BashOperator(
         task_id='fetch_sp500_list_fmp',
-        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_enginnering/prod/bronze/sp500_list_ingestion.py',
+        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/sp500_list_ingestion.py',
     )
 
     # 2. Consolidation de l'historique S&P 500
     task_consolidate_history = BashOperator(
         task_id='consolidate_sp500_history',
-        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_enginnering/prod/bronze/sp500_consolidated_history.py',
+        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/sp500_consolidated_history.py',
     )
 
     # 3. Ingestion Parallèle des prix
     task_ingest_stocks_2b = BashOperator(
         task_id='ingest_stocks_2b',
-        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_enginnering/prod/bronze/data_raw_2b.py',
+        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/data_raw_2b.py',
     )
 
     task_ingest_etfs = BashOperator(
         task_id='ingest_raw_etfs',
-        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_enginnering/prod/bronze/data_raw_etfs.py',
+        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/data_raw_etfs.py',
     )
 
     task_ingest_sp500_index = BashOperator(
         task_id='ingest_sp500_index',
-        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_enginnering/prod/bronze/data_raw_sp500.py',
+        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/data_raw_sp500.py',
     )
 
     task_ingest_sp500_stocks = BashOperator(
         task_id='ingest_sp500_stocks_daily',
-        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_enginnering/prod/bronze/sp500_prices_daily.py',
+        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/sp500_prices_daily.py',
     )
 
     # 4. Trigger de la couche Silver

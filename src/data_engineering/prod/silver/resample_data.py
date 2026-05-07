@@ -41,6 +41,9 @@ def process_resampling(df_daily, frequency):
     
     # Cleaning: Handle Close_Raw if needed (standard in our Gold layer)
     if 'AdjClose' in resampled.columns:
+        # Fallback: Si AdjClose est NULL (cas des données historiques anciennes), 
+        # on utilise le Close standard pour ne pas perdre la donnée
+        resampled['AdjClose'] = resampled['AdjClose'].fillna(resampled['Close'])
         resampled = resampled.rename(columns={'Close': 'Close_Raw', 'AdjClose': 'Close'})
     
     # Final cleanup: Drop rows where Close is NaN
@@ -65,9 +68,12 @@ def main():
     spark = create_spark_session(f"Silver_Resample_{args.name}")
     
     try:
-        # 1. Load Source
+        # 1. Load Source (Détection automatique Parquet ou Delta)
         logger.info(f"📥 Chargement des données Daily depuis {args.source}")
-        sdf_daily = spark.read.format("delta").load(args.source)
+        if args.source.endswith(".parquet"):
+            sdf_daily = spark.read.parquet(args.source)
+        else:
+            sdf_daily = spark.read.format("delta").load(args.source)
         
         # 2. Conversion to Pandas (Efficient for our volume of cleaned data)
         df_daily = sdf_daily.toPandas()

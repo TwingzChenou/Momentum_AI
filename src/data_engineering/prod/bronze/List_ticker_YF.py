@@ -32,7 +32,7 @@ def fetch_tickers_2b():
         f"https://financialmodelingprep.com/stable/company-screener?"
         f"marketCapMoreThan=2000000000&"
         f"country={TARGET_COUNTRIES}&"
-        f"exchange=NYSE,NASDAQ&" # Sécurité absolue : Uniquement coté US
+        f"exchange=NYSE,NASDAQ,PAR,XETRA,MIL,AMS,LSE,SIX,TSX,JPX,ASX,CPH,HKSE,BSE&"
         f"isEtf=false&"
         f"isFund=false&"
         f"isActivelyTrading=true&"

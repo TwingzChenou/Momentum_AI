@@ -25,5 +25,6 @@ mlflow
 joblib
 optuna
 google-cloud-storage
-dbt-spark[session]>=1.5.0
+dbt-duckdb
 dbt-core
+deltalake

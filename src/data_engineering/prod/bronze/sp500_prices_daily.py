@@ -36,8 +36,8 @@ def get_incremental_tasks(spark):
     except:
         df_max = spark.createDataFrame([], "Ticker string, LastDate date")
 
-    # On fixe la date de début minimale au 1er Janvier 2025
-    start_floor = datetime(2025, 1, 1).date()
+    # On fixe la date de début minimale au 1er Janvier 2020 pour garantir un historique solide aux nouveaux tickers
+    start_floor = datetime(2020, 1, 1).date()
     
     # 2. Join (Left Join to keep ALL current members)
     df_tasks = df_latest.join(df_max, on="Ticker", how="left")
@@ -54,12 +54,12 @@ def get_incremental_tasks(spark):
     )
     
     # Final filter: Start < Today
-    df_tasks = df_tasks.filter(F.col("EffectiveStart") < today)
+    df_tasks = df_tasks.filter(F.col("EffectiveStart") < F.lit(today))
     
     tasks = [(row['Ticker'], str(row['EffectiveStart'])) for row in df_tasks.collect()]
     return tasks
 
-def fetch_yf_data_incremental(tasks, chunk_size=20):
+def fetch_yf_data_incremental(tasks, chunk_size=5):
     """Fetches data for specific tickers starting from their respective last dates."""
     all_data = []
     end_date = datetime.today().strftime('%Y-%m-%d')
@@ -78,21 +78,24 @@ def fetch_yf_data_incremental(tasks, chunk_size=20):
             
             for attempt in range(3):
                 try:
-                    df = yf.download(tickers=chunk, start=start_date, end=end_date, interval="1d", group_by="ticker", auto_adjust=False, progress=False, threads=True)
+                    df = yf.download(tickers=chunk, start=start_date, end=end_date, interval="1d", group_by="ticker", auto_adjust=False, progress=False, threads=False)
                     if not df.empty:
-                        if len(chunk) == 1:
+                        # Aplatissement systématique du MultiIndex (Ticker, Metric) -> colonnes simples
+                        if isinstance(df.columns, pd.MultiIndex):
+                            df = df.stack(level=0, future_stack=True).rename_axis(['Date', 'Ticker']).reset_index()
+                        else:
+                            # Cas rare où ce n'est pas un MultiIndex
                             df['Ticker'] = chunk[0]
                             df = df.reset_index()
-                        else:
-                            df = df.stack(level=0, future_stack=True).rename_axis(['Date', 'Ticker']).reset_index()
+                        
                         all_data.append(df)
                         break
                     else:
-                        time.sleep(2)
+                        time.sleep(5)
                 except Exception as e:
                     logger.error(f"❌ Error: {e}")
-                    time.sleep(5)
-            time.sleep(1)
+                    time.sleep(10)
+            time.sleep(2)
             
     if not all_data: return pd.DataFrame()
     return pd.concat(all_data, ignore_index=True)
@@ -118,7 +121,7 @@ def main():
         # 2. Fetch Data
         logger.info("🌐 Étape 2 : Téléchargement des données depuis Yahoo Finance...")
         fetch_start = time.time()
-        df_new = fetch_yf_data_incremental(tasks)
+        df_new = fetch_yf_data_incremental(tasks, chunk_size=2)
         fetch_duration = time.time() - fetch_start
         
         if df_new.empty:
@@ -131,44 +134,62 @@ def main():
         logger.info("🛠️ Étape 3 : Transformation et Standardisation des colonnes...")
         final_df = pd.DataFrame()
         
-        # Mapping robuste des colonnes
-        final_df['Ticker'] = df_new['Ticker'] if 'Ticker' in df_new.columns else df_new['symbol']
-        final_df['Date'] = pd.to_datetime(df_new['Date'] if 'Date' in df_new.columns else df_new['date']).dt.date
-        final_df['Open'] = df_new['Open']
-        final_df['High'] = df_new['High']
-        final_df['Low'] = df_new['Low']
-        final_df['Close'] = df_new['Close']
-        final_df['AdjClose'] = df_new['Adj Close'] if 'Adj Close' in df_new.columns else df_new['Close']
-        final_df['Volume'] = df_new['Volume']
+        # Mapping robuste et typage forcé pour éviter les erreurs Spark (CANNOT_ACCEPT_OBJECT_IN_TYPE)
+        final_df['Ticker'] = df_new['Ticker']
+        final_df['Date'] = pd.to_datetime(df_new['Date']).dt.date
         
-        logger.info(f"✨ Colonnes standardisées : {list(final_df.columns)}")
+        # Forcer les prix en float (DoubleType)
+        for col in ['Open', 'High', 'Low', 'Close']:
+            final_df[col] = pd.to_numeric(df_new[col], errors='coerce').astype(float)
         
-        logger.info("🚀 Conversion du DataFrame Pandas en Spark...")
-        sdf_new = spark.createDataFrame(final_df)
+        final_df['AdjClose'] = pd.to_numeric(df_new['Adj Close'] if 'Adj Close' in df_new.columns else df_new['Close'], errors='coerce').astype(float)
         
-        # 4. Sauvegarde avec Merge (pour éviter les doublons)
+        # Forcer le Volume en int (LongType) - Remplissage des NaNs par 0 pour permettre la conversion
+        final_df['Volume'] = pd.to_numeric(df_new['Volume'], errors='coerce').fillna(0).astype(int)
+        
+        logger.info(f"✨ Colonnes standardisées et typées : {list(final_df.columns)}")
+        
+        # 4. Sauvegarde Sécurisée (AUCUN OVERWRITE AUTORISÉ)
+        from pyspark.sql.types import StructType, StructField, StringType, DateType, DoubleType, LongType
         from delta.tables import DeltaTable
+        
+        # Définition explicite du schéma pour éviter les erreurs d'inférence (CANNOT_MERGE_TYPE)
+        schema = StructType([
+            StructField("Ticker", StringType(), True),
+            StructField("Date", DateType(), True),
+            StructField("Open", DoubleType(), True),
+            StructField("High", DoubleType(), True),
+            StructField("Low", DoubleType(), True),
+            StructField("Close", DoubleType(), True),
+            StructField("AdjClose", DoubleType(), True),
+            StructField("Volume", LongType(), True)
+        ])
+
+        logger.info("🚀 Conversion du DataFrame Pandas en Spark avec schéma explicite...")
+        # S'assurer que les dates sont au format datetime pour Spark
+        final_df['Date'] = pd.to_datetime(final_df['Date'])
+        for col in ['Open', 'High', 'Low', 'Close', 'AdjClose']:
+            final_df[col] = pd.to_numeric(final_df[col], errors='coerce').astype('float64')
+        # -----------------------------------------------
+
+        logger.info("🚀 Conversion du DataFrame Pandas en Spark avec schéma explicite...")
+        sdf_new = spark.createDataFrame(final_df, schema=schema)
+        
         save_start = time.time()
+        
         if DeltaTable.isDeltaTable(spark, Paths.SP500_STOCK_PRICES):
-            # Vérifier si la table existante utilise l'ancien schéma (symbol/adjClose)
-            existing_cols = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES).columns
-            logger.info(f"🔎 Colonnes existantes dans la table Delta : {existing_cols}")
+            logger.info(f"🔄 Étape 4 : Upsert (Merge) dans la table Delta : {Paths.SP500_STOCK_PRICES}")
+            dt = DeltaTable.forPath(spark, Paths.SP500_STOCK_PRICES)
             
-            if "symbol" in existing_cols or "Ticker" not in existing_cols:
-                logger.warning("⚠️ Ancien schéma détecté (symbol/adjClose). Migration vers le nouveau schéma (Ticker/Close)...")
-                logger.info(f"🔄 Réécriture complète de la table : {Paths.SP500_STOCK_PRICES}")
-                sdf_new.write.format("delta").mode("overwrite").option("overwriteSchema", "true").save(Paths.SP500_STOCK_PRICES)
-                logger.success("✅ Migration du schéma terminée avec succès.")
-            else:
-                logger.info(f"🔄 Étape 4 : Upsert (Merge) dans la table Delta : {Paths.SP500_STOCK_PRICES}")
-                dt = DeltaTable.forPath(spark, Paths.SP500_STOCK_PRICES)
-                dt.alias("old").merge(
-                    sdf_new.alias("new"),
-                    "old.Ticker = new.Ticker AND old.Date = new.Date"
-                ).whenNotMatchedInsertAll().execute()
+            dt.alias("old").merge(
+                sdf_new.alias("new"),
+                "old.Ticker = new.Ticker AND old.Date = new.Date"
+            ).whenNotMatchedInsertAll().execute()
         else:
-            logger.info(f"🆕 Étape 4 : Création initiale de la table Delta : {Paths.SP500_STOCK_PRICES}")
-            sdf_new.write.format("delta").mode("overwrite").save(Paths.SP500_STOCK_PRICES)
+            # Si la table n'existe pas, on utilise 'append' au lieu de 'overwrite' 
+            # pour éviter d'effacer des fichiers qui pourraient être là par erreur
+            logger.info(f"🆕 Étape 4 : Création/Append dans la table Delta : {Paths.SP500_STOCK_PRICES}")
+            sdf_new.write.format("delta").mode("append").save(Paths.SP500_STOCK_PRICES)
         
         save_duration = time.time() - save_start
         logger.success(f"💾 Sauvegarde terminée avec succès en {save_duration:.2f}s")
@@ -184,4 +205,6 @@ def main():
         if spark: spark.stop()
 
 if __name__ == "__main__":
+    # Augmenter la résilience pour le téléchargement massif
+    # Utiliser un chunk_size très petit et des pauses pour éviter le Rate Limit
     main()

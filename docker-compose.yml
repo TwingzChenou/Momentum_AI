@@ -13,7 +13,7 @@ services:
       - .env
     environment:
       # On force JAVA_HOME pour Docker, écrasant celui du .env local
-      - JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
       - PYSPARK_PYTHON=python3
       - PYSPARK_DRIVER_PYTHON=python3
       - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED

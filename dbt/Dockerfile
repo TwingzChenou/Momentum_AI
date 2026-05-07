@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir \
     dbt-duckdb \
     duckdb \
     boto3 \
-    pandas
+    pandas \
+    deltalake
 
 # Set working directory
 WORKDIR /app/dbt
@@ -27,7 +28,7 @@ ENV DBT_PROFILES_DIR=/app/dbt
 # Script to run dbt
 COPY <<EOF /usr/local/bin/run-dbt.sh
 #!/bin/bash
-dbt "$@"
+python3 -m dbt "$@"
 EOF
 
 RUN chmod +x /usr/local/bin/run-dbt.sh

@@ -50,16 +50,7 @@ def run_optimization(n_trials=50):
         sp500_raw = sp500_raw[~sp500_raw.index.duplicated(keep='last')]
         sp500_raw = sp500_raw[['Close']]
         
-        # 2. Données SILVER (Delta Lake)
-        df_etf = spark.read.format("delta").load(Paths.DATA_RAW_ETF_WEEKLY_SILVER).toPandas()
-        df_stocks = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES_WEEKLY_SILVER).toPandas()
-
-        # 3. Normalisation Robuste
-        for df in [df_etf, df_stocks]:
-            if df.empty: continue
-            df['Date'] = pd.to_datetime(df['Date']).dt.normalize()
-        
-        # Lancement Optuna avec Sampler Bayésien (TPE)
+        # 2. Lancement Optuna avec Sampler Bayésien (TPE)
         sampler = optuna.samplers.TPESampler(n_startup_trials=10) # 10 trials aléatoires pour 'chauffer' le modèle bayésien
         study = optuna.create_study(direction='maximize', sampler=sampler)
         
@@ -69,6 +60,14 @@ def run_optimization(n_trials=50):
             logger.success(f"🏆 Meilleure stratégie trouvée : {study.best_value:.4f}")
             mlflow.log_params(study.best_params)
             mlflow.log_metric("calmar", study.best_value)
+
+            # --- EXPORT POUR DBT ---
+            import json
+            config_path = os.path.join(os.getcwd(), "config/best_strategy_params.json")
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            with open(config_path, "w") as f:
+                json.dump(study.best_params, f, indent=4)
+            logger.info(f"💾 Meilleurs paramètres exportés vers {config_path}")
             
     finally:
         spark.stop()
@@ -110,7 +109,7 @@ def objective_silver(trial, sp500_raw, df_etf_raw, df_stocks_raw):
             # 4. Simulation
             # Le moteur va lui-même calculer SMA, ADX, ATR et Eligible à chaque trial
             # en utilisant les paramètres suggérés par Optuna dans 'config'.
-            engine = RegimeSwitchingMomentumBacktester(config=config, start_date="1998-01-01", leverage=config['leverage'])
+            engine = RegimeSwitchingMomentumBacktester(config=config, start_date="1980-01-01", leverage=config['leverage'])
             allocations = engine.simulate_portfolio(sp500, etfs, stocks)
             perf = engine.generate_performance(allocations, etfs, stocks, sp500)
             

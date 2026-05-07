@@ -16,16 +16,25 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+# Valeurs par défaut issues de l'optimisation (seront écrasées par Airflow)
+vars:
+  sp500_sma_fast: 13
+  sp500_sma_slow: 50
+  stock_sma_fast: 13
+  stock_sma_slow: 50
+  etf_sma_fast: 13
+  etf_sma_slow: 50
+  stock_adx_threshold: 25.0
+  stock_atr_threshold: 0.20
+  stock_mom_period: 20
+  etf_mom_period: 1
+
 models:
   momentum_dbt:
     staging:
       +materialized: table
-      +file_format: delta
-    marts:
-      +materialized: table
-      +file_format: delta
     gold:
       +materialized: table
-      +file_format: delta
 
-
+on-run-start:
+  - "{{ register_external_sources() }}"

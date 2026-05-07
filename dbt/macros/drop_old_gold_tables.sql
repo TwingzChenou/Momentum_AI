@@ -1,6 +1,6 @@
 {% macro drop_old_gold_tables() %}
     {% set tables = ['gold_stock_features', 'gold_etf_features', 'gold_sp500_index_features'] %}
-    {% set schemas = ['default', 'gold_layer'] %}
+    {% set schemas = ['main'] %}
     {% for schema in schemas %}
         {% for table in tables %}
             {% set drop_query %}

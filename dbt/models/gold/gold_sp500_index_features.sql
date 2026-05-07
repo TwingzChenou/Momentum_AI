@@ -1,16 +1,13 @@
-{% set target_path = var('index_features_path', 'gs://finance-data-lake-unique-id/gold/sp500_index_features') %}
 {{ config(
-    materialized='table',
-    file_format='delta',
-    location=target_path
+    materialized='external',
+    location="gs://finance-data-lake-unique-id/gold/sp500_index_features.parquet",
+    format='parquet'
 ) }}
-{{ log("Writing gold_sp500_index_features to: " ~ target_path, info=True) }}
 
 WITH base AS (
     SELECT * FROM {{ source('gcs_silver_ext', 'data_raw_sp500_weekly') }}
 ),
 
--- On force le Ticker à ^GSPC pour la cohérence
 base_with_ticker AS (
     SELECT 
         '^GSPC' as Ticker,
@@ -18,7 +15,6 @@ base_with_ticker AS (
     FROM base
 ),
 
--- Préparation des valeurs précédentes
 pre_indicators AS (
     SELECT 
         *,
@@ -28,7 +24,6 @@ pre_indicators AS (
     FROM base_with_ticker
 ),
 
--- Calcul du True Range (TR) et des Directional Movements (DM)
 true_range_calc AS (
     SELECT 
         *,
@@ -42,20 +37,19 @@ true_range_calc AS (
     FROM pre_indicators
 ),
 
--- Lissage des indicateurs (Moyennes mobiles pour le régime de marché)
 smoothed_indicators AS (
     SELECT 
         *,
         AVG(TR) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) as ATR,
         AVG(DM_plus) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) as DM_plus_smooth,
         AVG(DM_minus) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) as DM_minus_smooth,
-        AVG(Close) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 49 PRECEDING AND CURRENT ROW) as SMA_fast,
-        AVG(Close) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 199 PRECEDING AND CURRENT ROW) as SMA_slow,
+        -- SMA basées sur l'optimisation
+        AVG(Close) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN ({{ var('sp500_sma_fast') }} - 1) PRECEDING AND CURRENT ROW) as SMA_fast,
+        AVG(Close) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN ({{ var('sp500_sma_slow') }} - 1) PRECEDING AND CURRENT ROW) as SMA_slow,
         (Close - LAG(Close, 20) OVER (PARTITION BY Ticker ORDER BY Date)) / LAG(Close, 20) OVER (PARTITION BY Ticker ORDER BY Date) as Momentum_XM
     FROM true_range_calc
 ),
 
--- Calcul des Directional Indicators (DI)
 final_adx_calc AS (
     SELECT 
         *,
@@ -64,7 +58,6 @@ final_adx_calc AS (
     FROM smoothed_indicators
 ),
 
--- Assemblage final
 final_features AS (
     SELECT 
         Ticker, Date, Close, SMA_fast, SMA_slow, Momentum_XM, ATR,
