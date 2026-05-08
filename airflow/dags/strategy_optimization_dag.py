@@ -16,7 +16,7 @@ def run_optuna_optimization():
     Lance le script d'optimisation via le conteneur
     """
     from src.optimization.strategy_optimizer import run_optimization
-    run_optimization(n_trials=200)
+    run_optimization(n_trials=500)
 
 with DAG(
     'strategy_optimization_weekly',

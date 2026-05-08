@@ -291,6 +291,7 @@ if run_button or 'perf_df' in st.session_state:
             st.markdown("**Filtres de Régime :**")
             st.write(f"- S&P 500 : SMA {config['sp500_sma_fast']}/{config['sp500_sma_slow']}")
             st.write(f"- Actions : SMA {config['stock_sma_fast']}/{config['stock_sma_slow']}")
+            st.write(f"- ETFs : SMA {config['etf_sma_fast']}/{config['etf_sma_slow']}")
             st.markdown("**Seuils de Risque :**")
             st.write(f"- ATR : {config['stock_atr_threshold']:.2f}")
             st.write(f"- ADX : {config['stock_adx_threshold']:.1f}")
