@@ -1,40 +1,49 @@
+# Nom du projet dbt
 name: 'momentum_dbt'
+# Version du projet
 version: '1.0.0'
+# Version de configuration dbt
 config-version: 2
 
+# Profil utilisé pour la connexion à la base de données (défini dans profiles.yml)
 profile: 'momentum_dbt'
 
-model-paths: ["models"]
-analysis-paths: ["analyses"]
-test-paths: ["tests"]
-seed-paths: ["seeds"]
-macro-paths: ["macros"]
-snapshot-paths: ["snapshots"]
+# Chemins vers les différents types de fichiers utilisés par dbt
+model-paths: ["models"]          # Modèles dbt
+analysis-paths: ["analyses"]    # Analyses supplémentaires
+test-paths: ["tests"]            # Tests pour les modèles
+seed-paths: ["seeds"]            # Données de départ (seeds)
+macro-paths: ["macros"]          # Macros réutilisables
+snapshot-paths: ["snapshots"]    # Snapshots des données
 
+# Chemin vers le dossier cible où seront stockés les fichiers compilés
 target-path: "target"
+# Fichiers et dossiers à nettoyer après chaque exécution
 clean-targets:
   - "target"
   - "dbt_packages"
 
-# Valeurs par défaut issues de l'optimisation (seront écrasées par Airflow)
+# Variables par défaut utilisées dans les modèles (peuvent être surchargées par Airflow)
 vars:
-  sp500_sma_fast: 13
-  sp500_sma_slow: 50
-  stock_sma_fast: 13
-  stock_sma_slow: 50
-  etf_sma_fast: 13
-  etf_sma_slow: 50
-  stock_adx_threshold: 25.0
-  stock_atr_threshold: 0.20
-  stock_mom_period: 20
-  etf_mom_period: 1
+  sp500_sma_fast: 13             # Période courte pour la moyenne mobile de l'indice SP500
+  sp500_sma_slow: 50             # Période longue pour la moyenne mobile de l'indice SP500
+  stock_sma_fast: 13             # Période courte pour la moyenne mobile des actions individuelles
+  stock_sma_slow: 50             # Période longue pour la moyenne mobile des actions individuelles
+  etf_sma_fast: 13               # Période courte pour la moyenne mobile des ETFs
+  etf_sma_slow: 50               # Période longue pour la moyenne mobile des ETFs
+  stock_adx_threshold: 25.0      # Seuil ADX pour les actions individuelles
+  stock_atr_threshold: 0.20      # Seuil ATR pour les actions individuelles
+  stock_mom_period: 20           # Période de momentum pour les actions individuelles
+  etf_mom_period: 1              # Période de momentum pour les ETFs
 
+# Configuration des modèles dbt
 models:
   momentum_dbt:
     staging:
-      +materialized: table
+      +materialized: table       # Modèles de staging materialisés en tables
     gold:
-      +materialized: table
+      +materialized: table       # Modèles de données finales (gold) materialisés en tables
 
+# Commandes à exécuter au début d'une run dbt
 on-run-start:
-  - "{{ register_external_sources() }}"
+  - "{{ register_external_sources() }}"  # Enregistre les sources externes avant le démarrage des runs

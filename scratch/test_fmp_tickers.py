@@ -1,3 +1,4 @@
+
 import os
 import requests
 import pandas as pd
@@ -8,9 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 FMP_API_KEY = os.getenv("FMP_API_KEY")
 
-def fetch_tickers_test(use_exchange_filter=True):
+def fetch_tickers_test():
     """
-    Test function to fetch tickers with or without exchange filter.
+    Test function to fetch tickers with country filters.
     """
     TARGET_COUNTRIES = "US,FR,IT,DE,CN,IN,BR,CA,JP,GB,NL,CH,TW,KR,AU,DK"
     
@@ -18,6 +19,7 @@ def fetch_tickers_test(use_exchange_filter=True):
     params = {
         "marketCapMoreThan": 2000000000,
         "country": TARGET_COUNTRIES,
+        "exchange": "NYSE,NASDAQ,PAR,XETRA,MIL,AMS,LSE,SIX,TSX,JPX,ASX,CPH,HKSE,BSE",
         "isEtf": "false",
         "isFund": "false",
         "isActivelyTrading": "true",
@@ -25,11 +27,7 @@ def fetch_tickers_test(use_exchange_filter=True):
         "apikey": FMP_API_KEY
     }
     
-    if use_exchange_filter:
-        params["exchange"] = "NYSE,NASDAQ"
-        logger.info("🔍 Testing WITH exchange=NYSE,NASDAQ filter...")
-    else:
-        logger.info("🌍 Testing WITHOUT exchange filter (All exchanges in target countries)...")
+    logger.info(f"🔍 Testing with countries={TARGET_COUNTRIES}...")
 
     try:
         response = requests.get(base_url, params=params)
@@ -41,53 +39,25 @@ def fetch_tickers_test(use_exchange_filter=True):
         logger.error(f"❌ Error: {e}")
         return pd.DataFrame()
 
-def analyze_results(df, label):
-    if df.empty:
-        print(f"\n--- {label} ---")
-        print("No data found.")
-        return
-
-    print(f"\n--- {label} ---")
-    print(f"Total tickers found: {len(df)}")
-    print(f"Columns: {df.columns.tolist()}")
-    
-    # Country distribution
-    if 'country' in df.columns:
-        print("\nTop 10 Countries:")
-        print(df['country'].value_counts().head(10))
-    
-    # Exchange distribution
-    exch_col = 'exchangeShortName' if 'exchangeShortName' in df.columns else 'exchange'
-    if exch_col in df.columns:
-        print(f"\nTop 10 Exchanges ({exch_col}):")
-        print(df[exch_col].value_counts().head(10))
-    
-    # Sample of non-US tickers
-    if 'country' in df.columns:
-        non_us = df[df['country'] != 'US']
-        if not non_us.empty:
-            print("\nSample of Non-US tickers:")
-            cols_to_show = [c for c in ['symbol', 'companyName', 'name', 'country', exch_col] if c in df.columns]
-            print(non_us[cols_to_show].head(10))
-        else:
-            print("\nNo Non-US tickers found.")
-
-def fetch_tickers_final_test(exchange):
+def fetch_tickers_test():
     """
-    Test function to fetch tickers with the correct exchange code.
+    Test function to fetch tickers with country filters.
     """
-    base_url = "https://financialmodelingprep.com/stable/company-screener?"
+    TARGET_COUNTRIES = "US,FR,IT,DE,CN,IN,BR,CA,JP,GB,NL,CH,TW,KR,AU,DK"
+    
+    base_url = "https://financialmodelingprep.com/stable/stock-screener?"
     params = {
-        "marketCapMoreThan": 1000000000, # Lowered to 1B for better chances
-        "exchange": exchange,
+        "marketCapMoreThan": 2000000000,
+        "country": TARGET_COUNTRIES,
+        "exchange": "NYSE,NASDAQ,PAR,XETRA,MIL,AMS,LSE,SIX,TSX,JPX,ASX,CPH,HKSE,BSE",
         "isEtf": "false",
         "isFund": "false",
         "isActivelyTrading": "true",
-        "limit": 100,
+        "limit": 10000,
         "apikey": FMP_API_KEY
     }
     
-    logger.info(f"🧪 Testing final attempt with exchange={exchange}...")
+    logger.info(f"🔍 Testing with countries={TARGET_COUNTRIES}...")
 
     try:
         response = requests.get(base_url, params=params)
@@ -96,13 +66,21 @@ def fetch_tickers_final_test(exchange):
         df = pd.DataFrame(data)
         return df
     except Exception as e:
-        logger.error(f"❌ Error for {exchange}: {e}")
+        logger.error(f"❌ Error: {e}")
         return pd.DataFrame()
 
+def check_ticker_in_list(ticker: str, bucket_list: list) -> bool:
+    """
+    Vérifie si un ticker est présent dans une liste (insensible à la casse).
+    """
+    ticker_upper = ticker.strip().upper()
+    bucket_upper = [t.strip().upper() for t in bucket_list]
+    return ticker_upper in bucket_upper
+
 if __name__ == "__main__":
-    if not FMP_API_KEY:
-        logger.error("FMP_API_KEY not found in .env file")
-    else:
-        for exch in ["PAR", "XETRA", "NYSE"]:
-            df = fetch_tickers_final_test(exch)
-            analyze_results(df, f"EXCHANGE: {exch}")
+    TARGET_TICKER = "AXTI"
+    
+    df = fetch_tickers_test()
+    logger.info(f"Nombre total de tickers : {len(df)}")
+    logger.info(f"Tickers : {df['symbol'].tolist()}")
+    logger.info(f"Ticker '{TARGET_TICKER}' présent dans la liste : {check_ticker_in_list(TARGET_TICKER, df['symbol'].tolist())}")

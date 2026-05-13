@@ -76,19 +76,20 @@ def objective_silver(trial, sp500_raw, df_etf_raw, df_stocks_raw):
     import ta
     
     config = {
-        'sp500_sma_fast': trial.suggest_int('sp500_sma_fast', 5, 30),
-        'sp500_sma_slow': trial.suggest_int('sp500_sma_slow', 35, 75),
-        'stock_sma_fast': trial.suggest_int('stock_sma_fast', 5, 30),
-        'stock_sma_slow': trial.suggest_int('stock_sma_slow', 35, 75),
-        'etf_sma_fast': trial.suggest_int('etf_sma_fast', 5, 30),
-        'etf_sma_slow': trial.suggest_int('etf_sma_slow', 35, 75),
-        'stock_adx_threshold': trial.suggest_float('stock_adx_threshold', 10.0, 35.0),
-        'stock_atr_threshold': trial.suggest_float('stock_atr_threshold', 0.10, 0.50),
-        'stock_mom_period': trial.suggest_int('stock_mom_period', 5, 13),
-        'etf_mom_period': trial.suggest_int('etf_mom_period', 4, 13),
-        'top_n': trial.suggest_int('top_n', 5, 30),
+        'sp500_sma_fast': trial.suggest_categorical('sp500_sma_fast', [7, 8, 9, 10, 12, 13, 14, 15, 20, 21, 25, 26]),
+        'sp500_sma_slow': trial.suggest_categorical('sp500_sma_slow', [30, 35, 40, 45, 50, 55]),
+        'stock_sma_fast': trial.suggest_categorical('stock_sma_fast', [7, 8, 9, 10, 12, 13, 14, 15, 20, 21, 25, 26, 30]),
+        'stock_sma_slow': trial.suggest_categorical('stock_sma_slow', [30, 35, 40, 45, 50, 55]),
+        'etf_sma_fast': trial.suggest_categorical('etf_sma_fast', [7, 8, 9, 10, 12, 13, 14, 15, 20, 21, 25, 26, 30]),
+        'etf_sma_slow': trial.suggest_categorical('etf_sma_slow', [30, 35, 40, 45, 50, 55]),
+        'stock_adx_threshold': trial.suggest_int('stock_adx_threshold', 10, 50, step=5),
+        'stock_atr_threshold': trial.suggest_int('stock_atr_threshold', 10, 50, step=5),
+        'stock_mom_period': trial.suggest_categorical('stock_mom_period', [4, 13, 26, 52]),
+        'etf_mom_period': trial.suggest_categorical('etf_mom_period', [4, 13, 26, 52]),
+        'top_n': trial.suggest_int('top_n', 5, 30, step=5),
         'rebalance_freq': trial.suggest_categorical('rebalance_freq', ['W', 'M', 'Q']),
-        'buffer_n': 15, 'leverage': 1.0, 'cash_yield': 0.04, 'margin_rate': 0.06, 'fees': 0.001
+        'buffer_n': trial.suggest_int('buffer_n', 15, 50, step=5),
+        'leverage': 1.0, 'cash_yield': 0.04, 'margin_rate': 0.06, 'fees': 0.001
     }
 
     try:

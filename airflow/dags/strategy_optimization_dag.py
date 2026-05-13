@@ -22,21 +22,23 @@ with DAG(
     'strategy_optimization_weekly',
     default_args=DEFAULT_ARGS,
     description='Optimisation hebdomadaire de la stratégie Momentum via Optuna et MLFlow',
-    schedule_interval=None,
-    catchup=False,
-    max_active_runs=1,
-    tags=['momentum', 'optimization', 'mlflow'],
+    schedule_interval=None,  # Exécution manuelle
+    catchup=False,  # Ne pas exécuter les runs manquées
+    max_active_runs=1,  # Limite le nombre de runs simultanés à 1
+    tags=['momentum', 'optimization', 'mlflow'],  # Tags pour filtrer et organiser les DAGs
 ) as dag:
 
     optimize_task = PythonOperator(
         task_id='run_strategy_optimization',
         python_callable=run_optuna_optimization,
+        # Exécute la fonction d'optimisation via Optuna
     )
 
     trigger_gold = TriggerDagRunOperator(
         task_id='trigger_gold_layer',
         trigger_dag_id='03_prod_gold_features',
         wait_for_completion=False,
+        # Déclenche le DAG de génération des features Gold une fois que l'optimisation est terminée
     )
 
     optimize_task >> trigger_gold

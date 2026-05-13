@@ -5,6 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from loguru import logger
 import requests
+from tradingview_screener import Query, Column
 
 # Force Spark to use the Python version of the current environment
 os.environ['PYSPARK_PYTHON'] = sys.executable
@@ -22,40 +23,57 @@ FMP_API_KEY = os.getenv("FMP_API_KEY")
 
 def fetch_tickers_2b():
     """
-    Fetch all tickers with market cap > 2B from FMP Screener API.
+    Fetch all tickers with market cap > 2B from TradingView Screener.
     """
-    logger.info("📡 Connecting to FMP API to fetch tickers > $2B...")
+    logger.info("📡 Connecting to TradingView to fetch tickers > $2B...")
     
-    TARGET_COUNTRIES = "US,FR,IT,DE,CN,IN,BR,CA,JP,GB,NL,CH,TW,KR,AU,DK"
-    # We use a large limit to bypass the default 1000 items limit on the API
-    url = (
-        f"https://financialmodelingprep.com/stable/company-screener?"
-        f"marketCapMoreThan=2000000000&"
-        f"country={TARGET_COUNTRIES}&"
-        f"exchange=NYSE,NASDAQ,PAR,XETRA,MIL,AMS,LSE,SIX,TSX,JPX,ASX,CPH,HKSE,BSE&"
-        f"isEtf=false&"
-        f"isFund=false&"
-        f"isActivelyTrading=true&"
-        f"limit=10000&"
-        f"apikey={FMP_API_KEY}"
-    )
+    query = (Query()
+        .set_markets('america', 'france', 'germany', 'italy', 'uk', 'canada', 'japan', 'hongkong')
+        .select('name', 'description', 'market_cap_basic', 'exchange', 'type', 'subtype')
+        .where(
+            Column('type') == 'stock',
+            Column('is_primary') == True,
+            Column('market_cap_basic') >= 2e9  
+        )
+        .limit(30000))
 
     try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        
-        df = pd.DataFrame(data)
+        n_total, df = query.get_scanner_data()
         
         if df.empty:
-            logger.warning("❌ No data returned from FMP API.")
-        else:
-            logger.info(f"✅ Successfully fetched {len(df)} tickers with market cap > 2B.")
+            logger.warning("❌ No data returned from TradingView.")
+            return None
+            
+        logger.info(f"✅ Successfully fetched {len(df)} tickers from TradingView.")
+
+        # --- Maintien de la compatibilité du schéma (format FMP) ---
+        df = df.rename(columns={
+            'name': 'symbol',
+            'description': 'companyName',
+            'market_cap_basic': 'marketCap',
+            'exchange': 'exchangeShortName'
+        })
+
+        # Ajout des colonnes attendues par Silver/Gold (Valeurs nulles)
+        cols_to_add = [
+            'sector', 'industry', 'beta', 'price', 'lastAnnualDividend', 
+            'volume', 'exchange', 'country', 'isEtf', 'isFund', 'isActivelyTrading'
+        ]
+        for col in cols_to_add:
+            if col not in df.columns:
+                if col == 'exchange':
+                    df[col] = df['exchangeShortName']
+                elif col == 'isActivelyTrading':
+                    df[col] = True
+                elif col in ['isEtf', 'isFund']:
+                    df[col] = False
+                else:
+                    df[col] = None
             
         return df
 
     except Exception as e:
-        logger.error(f"❌ Error fetching tickers from FMP: {e}")
+        logger.error(f"❌ Error fetching tickers from TradingView: {e}")
         return None
 
 def save_to_lake(spark, pandas_df):

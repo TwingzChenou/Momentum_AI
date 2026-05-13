@@ -1,91 +1,95 @@
 services:
+  # Service pour la base de données PostgreSQL
   postgres:
-    image: postgres:13
+    image: postgres:13  # Utilise l'image officielle de PostgreSQL en version 13
     environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
+      - POSTGRES_USER=airflow  # Nom d'utilisateur pour PostgreSQL
+      - POSTGRES_PASSWORD=airflow  # Mot de passe pour PostgreSQL
+      - POSTGRES_DB=airflow  # Nom de la base de données
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
-      interval: 5s
-      retries: 5
+      test: ["CMD", "pg_isready", "-U", "airflow"]  # Vérifie si PostgreSQL est prêt
+      interval: 5s  # Intervalle entre les vérifications de santé
+      retries: 5  # Nombre de tentatives avant d'échouer
 
+  # Service pour le serveur web Airflow
   airflow-webserver:
     build:
-      context: ..
-      dockerfile: airflow/Dockerfile
-    command: webserver
+      context: ..  # Contexte de construction (répertoire parent)
+      dockerfile: airflow/Dockerfile  # Fichier Dockerfile à utiliser
+    command: webserver  # Commande pour démarrer le serveur web Airflow
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_healthy  # Dépend du service PostgreSQL qui doit être sain
     ports:
-      - "8080:8080"
+      - "8080:8080"  # Expose le port 8080 de l'hôte vers le port 8080 du conteneur
     volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ../src:/opt/airflow/src
-      - ../config:/opt/airflow/config
-      - ../data:/opt/airflow/data
-      - ../scripts:/opt/airflow/scripts
-      - ../dbt:/opt/airflow/dbt
-      - ../.env:/opt/airflow/.env
+      - ./dags:/opt/airflow/dags  # Monte le répertoire des DAGs
+      - ./logs:/opt/airflow/logs  # Monte le répertoire des logs
+      - ../src:/opt/airflow/src  # Monte le répertoire src
+      - ../config:/opt/airflow/config  # Monte le répertoire config
+      - ../data:/opt/airflow/data  # Monte le répertoire data
+      - ../scripts:/opt/airflow/scripts  # Monte le répertoire scripts
+      - ../dbt:/opt/airflow/dbt  # Monte le répertoire dbt
+      - ../.env:/opt/airflow/.env  # Monte le fichier .env
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - PYTHONPATH=/opt/airflow
-      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
-      - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED
-      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/keys_gcp/finance-ml-project-486410-f5aa9a641051.json
-      - DOCKER_ENV=true
-    restart: always
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow  # Connexion à la base de données PostgreSQL
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor  # Utilise l'executor LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False  # Ne charge pas les exemples d'Airflow
+      - PYTHONPATH=/opt/airflow  # Chemin Python pour inclure le répertoire Airflow
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64  # Chemin vers Java
+      - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED  # Options Java pour ouvrir certains modules
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/keys_gcp/finance-ml-project-486410-f5aa9a641051.json  # Fichier de credentials Google Cloud
+      - DOCKER_ENV=true  # Variable d'environnement pour indiquer que l'environnement est Docker
+    restart: always  # Redémarre toujours le conteneur en cas d'arrêt
 
+  # Service pour le planificateur Airflow
   airflow-scheduler:
     build:
-      context: ..
-      dockerfile: airflow/Dockerfile
-    command: scheduler
+      context: ..  # Contexte de construction (répertoire parent)
+      dockerfile: airflow/Dockerfile  # Fichier Dockerfile à utiliser
+    command: scheduler  # Commande pour démarrer le planificateur Airflow
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_healthy  # Dépend du service PostgreSQL qui doit être sain
     volumes:
-      - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-      - ../src:/opt/airflow/src
-      - ../config:/opt/airflow/config
-      - ../data:/opt/airflow/data
-      - ../scripts:/opt/airflow/scripts
-      - ../dbt:/opt/airflow/dbt
-      - ../.env:/opt/airflow/.env
+      - ./dags:/opt/airflow/dags  # Monte le répertoire des DAGs
+      - ./logs:/opt/airflow/logs  # Monte le répertoire des logs
+      - ../src:/opt/airflow/src  # Monte le répertoire src
+      - ../config:/opt/airflow/config  # Monte le répertoire config
+      - ../data:/opt/airflow/data  # Monte le répertoire data
+      - ../scripts:/opt/airflow/scripts  # Monte le répertoire scripts
+      - ../dbt:/opt/airflow/dbt  # Monte le répertoire dbt
+      - ../.env:/opt/airflow/.env  # Monte le fichier .env
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - PYTHONPATH=/opt/airflow
-      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
-      - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED
-      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/keys_gcp/finance-ml-project-486410-f5aa9a641051.json
-      - DOCKER_ENV=true
-    restart: always
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow  # Connexion à la base de données PostgreSQL
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor  # Utilise l'executor LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False  # Ne charge pas les exemples d'Airflow
+      - PYTHONPATH=/opt/airflow  # Chemin Python pour inclure le répertoire Airflow
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64  # Chemin vers Java
+      - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED  # Options Java pour ouvrir certains modules
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/config/keys_gcp/finance-ml-project-486410-f5aa9a641051.json  # Fichier de credentials Google Cloud
+      - DOCKER_ENV=true  # Variable d'environnement pour indiquer que l'environnement est Docker
+    restart: always  # Redémarre toujours le conteneur en cas d'arrêt
 
+  # Service pour initialiser Airflow
   airflow-init:
     build:
-      context: ..
-      dockerfile: airflow/Dockerfile
+      context: ..  # Contexte de construction (répertoire parent)
+      dockerfile: airflow/Dockerfile  # Fichier Dockerfile à utiliser
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow  # Connexion à la base de données PostgreSQL
     depends_on:
-      - postgres
-    entrypoint: /bin/bash
+      - postgres  # Dépend du service PostgreSQL
+    entrypoint: /bin/bash  # Utilise bash comme point d'entrée
     command:
       - -c
       - |
-        airflow db init &&
+        airflow db init &&  # Initialise la base de données Airflow
         airflow users create \
           --username admin \
           --firstname admin \
           --lastname admin \
           --role Admin \
           --email admin@admin.com \
-          --password admin
+          --password admin  # Crée un utilisateur administrateur pour Airflow
 
