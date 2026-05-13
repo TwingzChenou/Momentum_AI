@@ -6,6 +6,7 @@ delta-spark==3.2.1
 pandas
 numpy
 yfinance
+tradingview-screener
 ta
 plotly
 
