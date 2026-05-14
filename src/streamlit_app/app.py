@@ -166,21 +166,33 @@ def init_spark():
 def load_and_prep_all_data(start_date_str, config_dict):
     spark = init_spark()
     
-    # 1. Indice S&P 500 via BigQuery GOLD
-    # 1. S&P 500 via BigQuery GOLD
-    df_sp500 = spark.read.format("bigquery").option("table", Paths.BQ_SP500_GOLD).load().toPandas()
+    # 1. On cherche la première date réelle des données Actions pour caler le chargement
+    # On utilise 'table' au lieu de 'query' pour éviter l'erreur de configuration de dataset
+    min_date_df = spark.read.format("bigquery").option("table", Paths.BQ_STOCKS_GOLD).load() \
+                      .selectExpr("MIN(Date) as min_date").toPandas()
+    first_data_date = pd.to_datetime(min_date_df['min_date'].iloc[0])
+    
+    # 2. Date de chargement effective : max(Date sélectionnée - 1 an, Date début DB)
+    requested_start = pd.to_datetime(start_date_str) - pd.DateOffset(years=1)
+    actual_load_start = max(requested_start, first_data_date).strftime('%Y-%m-%d')
+    
+    # 3. Chargement S&P 500
+    df_sp500 = spark.read.format("bigquery").option("table", Paths.BQ_SP500_GOLD).load() \
+                    .where(f"Date >= '{actual_load_start}'").toPandas()
     
     # Normalisation pour l'indexation temporelle
     if 'Date' in df_sp500.columns:
         df_sp500['Date'] = pd.to_datetime(df_sp500['Date']).dt.normalize()
         df_sp500 = df_sp500.set_index('Date').sort_index()
     
-    # 2. ETFs via BigQuery GOLD
-    df_etf = spark.read.format("bigquery").option("table", Paths.BQ_ETF_GOLD).load().toPandas()
+    # 4. Chargement ETFs
+    df_etf = spark.read.format("bigquery").option("table", Paths.BQ_ETF_GOLD).load() \
+                  .where(f"Date >= '{actual_load_start}'").toPandas()
     df_etf['Date'] = pd.to_datetime(df_etf['Date']).dt.tz_localize(None).dt.normalize()
     
-    # 3. Actions via BigQuery GOLD
-    df_stocks = spark.read.format("bigquery").option("table", Paths.BQ_STOCKS_GOLD).load().toPandas()
+    # 5. Chargement Actions
+    df_stocks = spark.read.format("bigquery").option("table", Paths.BQ_STOCKS_GOLD).load() \
+                    .where(f"Date >= '{actual_load_start}'").toPandas()
     df_stocks['Date'] = pd.to_datetime(df_stocks['Date']).dt.tz_localize(None).dt.normalize()
 
     # Initialisation du moteur
@@ -213,7 +225,11 @@ def compute_backtest_cached(start_date_str, leverage, config_dict):
         leverage=leverage
     )
     
-    # Exécution du backtest (rapide grâce aux index/dictionnaires)
+    # Correction : On prépare les données explicitement ici pour que les modifs (ATR %) 
+    # soient visibles dans l'interface Streamlit
+    df_etf, df_stocks = engine.load_and_prep_data_silver(df_etf, df_stocks)
+    
+    # Exécution du backtest
     allocations = engine.simulate_portfolio(df_sp500, df_etf, df_stocks)
     perf_df = engine.generate_performance(allocations, df_etf, df_stocks, df_sp500)
     
@@ -269,6 +285,13 @@ start_date = st.sidebar.date_input(
 )
 
 leverage = st.sidebar.slider("🚀 Effet de Levier", 1.0, 3.0, 1.0, 0.1)
+
+# --- BOUTON CLEAR CACHE ---
+if st.sidebar.button("🗑️ Vider le Cache", use_container_width=True):
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    st.success("Cache vidé avec succès !")
+    st.rerun()
 
 run_button = st.sidebar.button("🚀 Lancer la Simulation", use_container_width=True)
 

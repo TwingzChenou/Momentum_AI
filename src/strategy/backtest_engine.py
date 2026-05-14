@@ -190,7 +190,9 @@ class RegimeSwitchingMomentumBacktester:
             
             cond_volatility = True
             if 'ATR' in df_stocks.columns:
-                cond_volatility = (df_stocks['ATR'] / df_stocks['Close']) < self.config.get('stock_atr_threshold', 0.15)
+                # On écrase ATR_pct par le calcul correct en pourcentage (ex: 45.0 pour 45%)
+                df_stocks['ATR_pct'] = (df_stocks['ATR'] / df_stocks['Close']) * 100
+                cond_volatility = df_stocks['ATR_pct'] < self.config.get('stock_atr_threshold', 15.0)
                 
             df_stocks['Eligible'] = cond_trend & cond_strength & cond_volatility
             
@@ -200,9 +202,8 @@ class RegimeSwitchingMomentumBacktester:
         logger.info(f"⚙️ Lancement de la Simulation (Levier {self.leverage}x)...")
         
         # --- PRÉPARATION INTERNE ---
-        # Si les données ne sont pas préparées (ex: chargement direct BigQuery), on le fait ici
-        if not etfs.empty and 'Eligible' not in etfs.columns:
-            etfs, stocks = self.load_and_prep_data_silver(etfs, stocks)
+        # On force la préparation locale pour s'assurer que les correctifs (ex: ATR %) sont appliqués
+        etfs, stocks = self.load_and_prep_data_silver(etfs, stocks)
             
         # --- ALIGNEMENT CALENDRIER ---
         # On force le S&P 500 en hebdomadaire (Vendredi) pour matcher les actions/ETFs
@@ -229,9 +230,7 @@ class RegimeSwitchingMomentumBacktester:
         current_portfolio = [] 
         prev_regime = None
         
-        s_fast = self.config.get('stock_sma_fast', 26)
-        min_date = pd.to_datetime(stocks['Date'].min()) if not stocks.empty else pd.to_datetime(dates[0])
-        sim_start_date = max(pd.to_datetime(self.start_date), min_date + pd.Timedelta(weeks=s_fast))
+        sim_start_date = pd.to_datetime(self.start_date)
 
         for d in dates:
             if d < sim_start_date: continue

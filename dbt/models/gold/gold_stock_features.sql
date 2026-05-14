@@ -36,9 +36,9 @@ true_range_calc AS (
 smoothed_indicators AS (
     SELECT 
         *,
-        AVG(TR) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) as ATR,
-        AVG(DM_plus) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) as DM_plus_smooth,
-        AVG(DM_minus) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) as DM_minus_smooth,
+        AVG(TR) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 3 PRECEDING AND CURRENT ROW) as ATR,
+        AVG(DM_plus) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 8 PRECEDING AND CURRENT ROW) as DM_plus_smooth,
+        AVG(DM_minus) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 8 PRECEDING AND CURRENT ROW) as DM_minus_smooth,
         AVG(Close) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN ({{ var('stock_sma_fast') }} - 1) PRECEDING AND CURRENT ROW) as SMA_fast,
         AVG(Close) OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN ({{ var('stock_sma_slow') }} - 1) PRECEDING AND CURRENT ROW) as SMA_slow,
         (Close - LAG(Close, {{ var('stock_mom_period') }} ) OVER (PARTITION BY Ticker ORDER BY Date)) / LAG(Close, {{ var('stock_mom_period') }} ) OVER (PARTITION BY Ticker ORDER BY Date) as Momentum_XM
@@ -58,9 +58,10 @@ final_adx_calc AS (
 final_features AS (
     SELECT 
         Ticker, Date, Close, SMA_fast, SMA_slow, Momentum_XM, ATR,
-        (ATR / Close) * 100 as ATR_pct,
+        -- Calcul explicite en pourcentage (ex: 15.0 pour 15%)
+        (ATR / NULLIF(Close, 0)) * 100 as ATR_pct,
         AVG(100 * ABS(DI_plus - DI_minus) / NULLIF(DI_plus + DI_minus, 0)) 
-            OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) as ADX
+            OVER (PARTITION BY Ticker ORDER BY Date ROWS BETWEEN 8 PRECEDING AND CURRENT ROW) as ADX
     FROM final_adx_calc
 )
 

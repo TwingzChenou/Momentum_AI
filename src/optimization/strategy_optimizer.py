@@ -83,12 +83,12 @@ def objective_silver(trial, sp500_raw, df_etf_raw, df_stocks_raw):
         'etf_sma_fast': trial.suggest_categorical('etf_sma_fast', [7, 8, 9, 10, 12, 13, 14, 15, 20, 21, 25, 26, 30]),
         'etf_sma_slow': trial.suggest_categorical('etf_sma_slow', [30, 35, 40, 45, 50, 55]),
         'stock_adx_threshold': trial.suggest_int('stock_adx_threshold', 10, 50, step=5),
-        'stock_atr_threshold': trial.suggest_int('stock_atr_threshold', 10, 50, step=5),
+        'stock_atr_threshold': trial.suggest_int('stock_atr_threshold', 10, 30, step=5),
         'stock_mom_period': trial.suggest_categorical('stock_mom_period', [4, 13, 26, 52]),
         'etf_mom_period': trial.suggest_categorical('etf_mom_period', [4, 13, 26, 52]),
         'top_n': trial.suggest_int('top_n', 5, 30, step=5),
         'rebalance_freq': trial.suggest_categorical('rebalance_freq', ['W', 'M', 'Q']),
-        'buffer_n': trial.suggest_int('buffer_n', 15, 50, step=5),
+        'buffer_n': trial.suggest_int('buffer_n', 5, 30, step=5),
         'leverage': 1.0, 'cash_yield': 0.04, 'margin_rate': 0.06, 'fees': 0.001
     }
 
