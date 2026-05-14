@@ -1,0 +1,21 @@
+{
+  "expectations": [
+    {
+      "id": "ecfaa943-09b7-44be-813a-7e0ff7836dd8",
+      "kwargs": {
+        "column": "ADX",
+        "max_value": 100.0,
+        "min_value": 0.0
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    }
+  ],
+  "id": "38c86349-0c83-41a7-a668-38f04b4b748b",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "suite_gold_1778767786",
+  "notes": null
+}

@@ -16,7 +16,7 @@ def get_champion_config(experiment_name="Strategy_Optimization_Champion"):
         mlflow_uri = os.getenv("MLFLOW_TRACKING_URI")
         if not mlflow_uri:
             if os.path.exists("/.dockerenv") or os.getenv("DOCKER_ENV") == "true":
-                mlflow_uri = "http://mlflow:5000"
+                mlflow_uri = "http://momentum-mlflow-server:5000"
             else:
                 mlflow_uri = "http://localhost:5001"
                 

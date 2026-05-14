@@ -17,7 +17,7 @@ services:
       - PYSPARK_PYTHON=python3
       - PYSPARK_DRIVER_PYTHON=python3
       - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_TRACKING_URI=http://momentum-mlflow-server:5000
       - DOCKER_ENV=true
     depends_on:
       - mlflow
@@ -37,22 +37,15 @@ services:
       mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/mlruns --allowed-hosts '*'
     restart: unless-stopped
 
-  dbt:
-    build:
-      context: .
-      dockerfile: dbt/Dockerfile
-    container_name: momentum-dbt-runner
+  gx-docs:
+    image: python:3.12-slim
+    container_name: momentum-gx-docs
     volumes:
-      - .:/app
+      - ./gx/uncommitted/data_docs/local_site:/app
     ports:
-      - "8081:8081"
-    env_file:
-      - .env
-    environment:
-      - DBT_PROFILES_DIR=/app/dbt
-    tty: true
-    entrypoint: /bin/bash
-    command: -c "tail -f /dev/null"
+      - "8082:8000"
+    working_dir: /app
+    command: python3 -m http.server 8000
 
 volumes:
   mlflow_data:

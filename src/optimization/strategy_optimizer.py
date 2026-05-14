@@ -15,6 +15,8 @@ from src.common.setup_spark import create_spark_session
 from src.strategy.backtest_engine import RegimeSwitchingMomentumBacktester
 from config.config_spark import Paths
 
+from src.common.quality_manager import QualityManager
+
 # --- CONFIGURATION MLFLOW ---
 MLFLOW_TRACKING_URI = "http://momentum-mlflow-server:5000" if os.getenv("DOCKER_ENV") else "http://localhost:5001"
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -31,14 +33,32 @@ def run_optimization(n_trials=50):
     spark = create_spark_session('Strategy_Optimizer_Silver')
     
     try:
-        # 1. Chargement des données
-        logger.info("📥 Chargement des données Silver depuis le Data Lake...")
-        sp500_raw = spark.read.format("delta").load(Paths.DATA_RAW_SP500_WEEKLY_SILVER).toPandas()
-        df_etf = spark.read.format("delta").load(Paths.DATA_RAW_ETF_WEEKLY_SILVER).toPandas()
-        df_stocks = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES_WEEKLY_SILVER).toPandas()
+        # 1. Chargement et Validation des données
+        logger.info("📥 Chargement des données Silver (S&P 500, ETFs, Index, 2B)...")
+        
+        # Indice et ETFs
+        sdf_index = spark.read.format("delta").load(Paths.DATA_RAW_SP500_WEEKLY_SILVER)
+        sdf_etf = spark.read.format("delta").load(Paths.DATA_RAW_ETF_WEEKLY_SILVER)
+        
+        # Fusion des Stocks (S&P 500 + Univers 2B)
+        sdf_sp500_stocks = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES_WEEKLY_SILVER)
+        sdf_2b_stocks = spark.read.format("delta").load(Paths.DATA_RAW_2B_WEEKLY_SILVER)
+        
+        logger.info("🔗 Fusion des univers Stocks (S&P 500 + 2B)...")
+        sdf_stocks = sdf_sp500_stocks.unionByName(sdf_2b_stocks, allowMissingColumns=True).dropDuplicates(['Ticker', 'Date'])
+        
+        # Validation Qualité GX avant conversion Pandas
+        QualityManager.validate_silver_data(sdf_index, "Indice SP500")
+        QualityManager.validate_silver_data(sdf_etf, "ETFs")
+        QualityManager.validate_silver_data(sdf_stocks, "Mega-Universe Stocks")
+        
+        # Conversion Pandas
+        sp500_raw = sdf_index.toPandas()
+        df_etf = sdf_etf.toPandas()
+        df_stocks = sdf_stocks.toPandas()
 
         # Statistiques
-        for df, label in [(df_etf, "ETFs"), (df_stocks, "Stocks")]:
+        for df, label in [(df_etf, "ETFs"), (df_stocks, "Stocks (Merged)")]:
             if not df.empty:
                 df['Date'] = pd.to_datetime(df['Date']).dt.normalize()
                 logger.info(f"📊 {label} : {len(df)} lignes, {df['Ticker'].nunique()} actifs, de {df['Date'].min().date()} à {df['Date'].max().date()}")

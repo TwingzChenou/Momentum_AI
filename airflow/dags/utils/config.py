@@ -25,6 +25,8 @@ HADOOP_CONFS = (
 # --- BASH COMMAND PREFIXES ---
 PREFIX_SPARK = (
     f'export BUCKET_NAME="{BUCKET_NAME}" && '
+    f'export DOCKER_ENV="true" && '
+    f'export MLFLOW_TRACKING_URI="http://momentum-mlflow-server:5000" && '
     f'export PYSPARK_SUBMIT_ARGS="--conf spark.jars.ivy=/tmp/ivy_cache_$RANDOM --packages {SPARK_PACKAGES} --jars {GCS_JAR} {HADOOP_CONFS} pyspark-shell" && '
     f'export GCP_KEY_PATH={GCP_KEY}'
 )

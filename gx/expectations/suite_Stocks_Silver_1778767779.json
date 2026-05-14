@@ -1,0 +1,29 @@
+{
+  "expectations": [
+    {
+      "id": "0020925d-85b1-4b4d-86d9-454a40630c0e",
+      "kwargs": {
+        "column": "Close"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "a3923379-3725-4311-b0d0-e2b0566f4691",
+      "kwargs": {
+        "column": "Close",
+        "min_value": 0.01
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    }
+  ],
+  "id": "a4ae8ac0-a5f1-4a26-826d-4e86c1f83442",
+  "meta": {
+    "great_expectations_version": "1.15.2"
+  },
+  "name": "suite_Stocks_Silver_1778767779",
+  "notes": null
+}

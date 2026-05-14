@@ -217,11 +217,11 @@ class RegimeSwitchingMomentumBacktester:
         
         # Dictionnaires pour accès rapide O(1)
         logger.info("📦 Indexation des données en mémoire...")
-        stocks_indexed = stocks.set_index(['Date', 'Ticker'])
+        stocks_indexed = stocks.drop_duplicates(subset=['Date', 'Ticker']).set_index(['Date', 'Ticker'])
         s_data = stocks_indexed[['Close', 'SMA_slow', 'Momentum_XM', 'Eligible']].to_dict('index')
         del stocks_indexed
         
-        etfs_indexed = etfs.set_index(['Date', 'Ticker'])
+        etfs_indexed = etfs.drop_duplicates(subset=['Date', 'Ticker']).set_index(['Date', 'Ticker'])
         e_data = etfs_indexed[['Close', 'SMA_slow', 'Eligible']].to_dict('index')
         del etfs_indexed
         
@@ -282,7 +282,8 @@ class RegimeSwitchingMomentumBacktester:
                         kept = []
                         for p in current_portfolio:
                             row = day_stocks[day_stocks['Ticker'] == p['Ticker']]
-                            if not row.empty and row.iloc[0]['Rank'] <= self.config.get('buffer_n', 15):
+                            # On ne garde que si l'action est TOUJOURS éligible (ATR/ADX) ET dans le buffer
+                            if not row.empty and row.iloc[0]['Eligible'] and row.iloc[0]['Rank'] <= self.config.get('buffer_n', 15):
                                 kept.append(p)
                             else:
                                 logger.debug(f"♻️ {d.date()} | {p['Ticker']} sorti (Rank > Buffer)")
@@ -347,8 +348,8 @@ class RegimeSwitchingMomentumBacktester:
     def generate_performance(self, allocations_df, etfs, stocks, sp500):
         if allocations_df.empty or sp500.empty: return pd.DataFrame()
             
-        prices_etf = etfs.pivot(index='Date', columns='Ticker', values='Close') if not etfs.empty else pd.DataFrame()
-        prices_stocks = stocks.pivot(index='Date', columns='Ticker', values='Close') if not stocks.empty else pd.DataFrame()
+        prices_etf = etfs.drop_duplicates(subset=['Date', 'Ticker']).pivot(index='Date', columns='Ticker', values='Close') if not etfs.empty else pd.DataFrame()
+        prices_stocks = stocks.drop_duplicates(subset=['Date', 'Ticker']).pivot(index='Date', columns='Ticker', values='Close') if not stocks.empty else pd.DataFrame()
         all_prices = pd.concat([prices_etf, prices_stocks], axis=1)
         
         # --- DIAGNOSTIC ---

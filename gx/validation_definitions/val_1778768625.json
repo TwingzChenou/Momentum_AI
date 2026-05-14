@@ -1,0 +1,22 @@
+{
+  "data": {
+    "asset": {
+      "id": "5bb25f3f-9567-439f-b1b8-a5e379809e44",
+      "name": "asset"
+    },
+    "batch_definition": {
+      "id": "daa62544-71ff-4d02-9947-681952c96302",
+      "name": "batch"
+    },
+    "datasource": {
+      "id": "aaca4aea-e296-4259-912a-943ab52b76f0",
+      "name": "ds_1778768625"
+    }
+  },
+  "id": "26b5728e-3d3f-48be-9dc3-7d5593e82d68",
+  "name": "val_1778768625",
+  "suite": {
+    "id": "598a35e1-05ba-4832-b7f7-073505dafcaa",
+    "name": "suite_Stocks_Silver_1778768625"
+  }
+}
