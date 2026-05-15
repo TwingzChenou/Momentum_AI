@@ -238,23 +238,47 @@ class RegimeSwitchingMomentumBacktester:
             regime = sp500.loc[d, 'Regime']
             if isinstance(regime, pd.Series): regime = regime.iloc[0]
             
-            # --- 1. MAINTENANCE QUOTIDIENNE (Stop-Loss) ---
+            # --- 1. MAINTENANCE QUOTIDIENNE (Trend Exit & Hard Stop-Loss) ---
             surviving = []
+            stop_loss_threshold = self.config.get('hard_stop_loss', 0.20)
+            
             for pos in current_portfolio:
                 t, ptype = pos['Ticker'], pos['Type']
+                entry_price = pos.get('EntryPrice')
+                
                 if ptype == 'Stock':
                     row = s_data.get((d, t), {})
                     price = row.get('Close')
                     sma = row.get('SMA_slow')
-                    if price and sma and price > sma: 
+                    
+                    if not price or not sma:
+                        surviving.append(pos)
+                        continue
+                    
+                    # A. Condition de Tendance (SMA Slow)
+                    is_trend_ok = price > sma
+                    
+                    # B. Condition de Hard Stop-Loss (-15% depuis l'achat)
+                    is_stop_loss_triggered = False
+                    if entry_price:
+                        loss_pct = (price / entry_price) - 1
+                        if loss_pct <= -stop_loss_threshold:
+                            is_stop_loss_triggered = True
+                            logger.warning(f"🚨 {d.date()} | STOP-LOSS déclenché sur {t}: {loss_pct*100:.1f}% (Entry: {entry_price:.2f}, Close: {price:.2f})")
+                    
+                    if is_trend_ok and not is_stop_loss_triggered:
                         surviving.append(pos)
                     else:
-                        logger.debug(f"📉 {d.date()} | Sortie Stop-Loss: {t} (Price {price} <= SMA {sma})")
+                        if not is_trend_ok:
+                            logger.debug(f"📉 {d.date()} | Sortie Tendance: {t} (Price {price:.2f} <= SMA {sma:.2f})")
                 else:
+                    # ETFs (Pas de stop-loss dur pour l'instant, seulement tendance)
                     row = e_data.get((d, t), {})
                     price = row.get('Close')
                     sma = row.get('SMA_slow')
-                    if price and sma and price > sma: surviving.append(pos)
+                    if price and sma and price > sma: 
+                        surviving.append(pos)
+            
             current_portfolio = surviving
 
             # --- 2. REBALANCEMENT ---
@@ -265,45 +289,35 @@ class RegimeSwitchingMomentumBacktester:
                 if regime == 'Bull':
                     # On garde les stocks actuels qui sont encore bons
                     current_portfolio = [p for p in current_portfolio if p['Type'] == 'Stock']
-                    cur_tickers = [p['Ticker'] for p in current_portfolio]
                     
                     # Sélection des nouveaux
                     day_stocks = stocks[stocks['Date'] == d].copy()
                     if day_stocks.empty:
                         logger.warning(f"⚠️ {d.date()} | Aucune donnée Action disponible ce jour.")
                     else:
-                        # Diagnostic d'éligibilité
-                        n_total = len(day_stocks)
-                        n_eligible = day_stocks['Eligible'].sum()
-                        logger.info(f"🔎 {d.date()} | Éligibilité Stocks: {n_eligible} / {n_total}")
-                        
                         day_stocks['Rank'] = day_stocks['Momentum_XM'].rank(ascending=False)
+                        
                         # On garde ceux qui sont déjà en portefeuille s'ils sont dans le top buffer
                         kept = []
                         for p in current_portfolio:
                             row = day_stocks[day_stocks['Ticker'] == p['Ticker']]
-                            # On ne garde que si l'action est TOUJOURS éligible (ATR/ADX) ET dans le buffer
                             if not row.empty and row.iloc[0]['Eligible'] and row.iloc[0]['Rank'] <= self.config.get('buffer_n', 15):
                                 kept.append(p)
-                            else:
-                                logger.debug(f"♻️ {d.date()} | {p['Ticker']} sorti (Rank > Buffer)")
                         
                         # On complète jusqu'à top_n
                         needed = self.config.get('top_n', 10) - len(kept)
-                        logger.info(f"🎯 {d.date()} | Besoin de {needed} nouveaux stocks (Déjà {len(kept)} gardés)")
-                        
                         if needed > 0:
                             candidates = day_stocks[day_stocks['Eligible'] & (~day_stocks['Ticker'].isin([p['Ticker'] for p in kept]))]
-                            logger.info(f"💡 {d.date()} | Candidats éligibles et nouveaux: {len(candidates)}")
-                            
                             top_new = candidates.nlargest(needed, 'Momentum_XM')
                             for _, row in top_new.iterrows():
-                                kept.append({'Ticker': row['Ticker'], 'Weight': 0, 'Type': 'Stock'})
+                                kept.append({
+                                    'Ticker': row['Ticker'], 
+                                    'Weight': 0, 
+                                    'Type': 'Stock',
+                                    'EntryPrice': row['Close'] # On fixe le prix d'entrée à l'achat
+                                })
                         
                         current_portfolio = kept
-                        if not current_portfolio:
-                             logger.warning(f"❌ {d.date()} | Aucun stock sélectionné!")
-                        
                         if current_portfolio:
                             w = self.leverage / len(current_portfolio)
                             for p in current_portfolio: p['Weight'] = w

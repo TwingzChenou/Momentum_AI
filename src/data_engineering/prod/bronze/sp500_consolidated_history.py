@@ -28,70 +28,81 @@ def process_sp500_consolidated_history(spark):
 
     logger.info("⚙️ Transforming data to build consolidated history...")
 
-    # Extract Adds from History
+    # 1. Extract events from FMP History (Base historical data)
+    # Note: We now use 'ingestion_date' instead of 'date'
     adds_hist = df_history.filter((col("symbol").isNotNull()) & (col("symbol") != "")) \
-        .select(col("symbol").alias("Ticker"), to_date(col("date")).alias("Date_start"))
+        .select(col("symbol").alias("Ticker"), to_date(col("ingestion_date")).alias("event_date"), lit("ADD").alias("event_type"))
         
-    # Extract Removes from History
-    removes_hist = df_history.filter((col("removedTicker").isNotNull()) & (col("removedTicker") != "")) \
-        .select(col("removedTicker").alias("Ticker"), to_date(col("date")).alias("Date_end"))
+    # If 'removedTicker' exists in history, use it. Otherwise, our drift detection will handle it.
+    if "removedTicker" in df_history.columns:
+        removes_hist = df_history.filter((col("removedTicker").isNotNull()) & (col("removedTicker") != "")) \
+            .select(col("removedTicker").alias("Ticker"), to_date(col("ingestion_date")).alias("event_date"), lit("REMOVE").alias("event_type"))
+    else:
+        removes_hist = spark.createDataFrame([], adds_hist.schema)
 
-    # Also Extract "Implicit" Adds from Latest (for stocks added before history data starts)
-    adds_latest = df_latest.select(
-        col("symbol").alias("Ticker"), 
-        to_date(col("dateFirstAdded")).alias("Date_start")
-    )
-    
-    # Clean up and combine adds Date_start
-    all_adds = adds_hist.unionByName(adds_latest).dropDuplicates(["Ticker", "Date_start"]).filter(col("Date_start").isNotNull())
-    all_removes = removes_hist.dropDuplicates(["Ticker", "Date_end"]).filter(col("Date_end").isNotNull())
+    # 2. Extract events from Wikipedia Latest (Ground truth for TODAY)
+    # We use the ingestion_date we just added
+    today = F.current_date()
+    latest_tickers = df_latest.select(col("symbol").alias("Ticker")).distinct()
 
-    # Map directly via chronological event logging to resolve any ordering
-    events_add = all_adds.select("Ticker", col("Date_start").alias("event_date"), lit("ADD").alias("event_type"))
-    events_remove = all_removes.select("Ticker", col("Date_end").alias("event_date"), lit("REMOVE").alias("event_type"))
+    # 3. Combine FMP events
+    events = adds_hist.unionByName(removes_hist)
+
+    # 4. Logic to detect current membership drift
+    # If a stock is in Latest but has no active record in events -> It was added today (or recently)
+    # If a stock has an active record (last event was ADD) but is NOT in Latest -> It was removed today
     
-    events = events_add.unionByName(events_remove).dropDuplicates(["Ticker", "event_date", "event_type"])
-    
-    # --- FIX: Deduplicate consecutive events of the same type ---
-    # If we have ADD followed by another ADD, we only keep the first one (earliest).
-    # If we have REMOVE followed by another REMOVE, we only keep the first one.
-    windowSpecDedup = Window.partitionBy("Ticker").orderBy("event_date", "event_type")
-    events = events.withColumn("prev_event_type", F.lag("event_type").over(windowSpecDedup))
-    events = events.filter((col("prev_event_type").isNull()) | (col("event_type") != col("prev_event_type")))
-    
-    # Restore window spec after filtering
+    # Simple consolidation first
     windowSpec = Window.partitionBy("Ticker").orderBy("event_date", "event_type")
+    consolidated = events.withColumn("prev_event_type", F.lag("event_type").over(windowSpec)) \
+                         .filter((col("prev_event_type").isNull()) | (col("event_type") != col("prev_event_type")))
     
-    # Compute the end date by finding the next REMOVE event
-    events_with_next = events.withColumn("next_date", lead("event_date").over(windowSpec)) \
-                             .withColumn("next_event", lead("event_type").over(windowSpec))
-    
-    df_consolidated = events_with_next.filter(col("event_type") == "ADD").select(
-        col("Ticker"),
-        col("event_date").alias("Date_start"),
-        when(col("next_event") == "REMOVE", col("next_date")).otherwise(None).alias("Date_end")
-    )
+    # Find last state for each ticker
+    last_state = consolidated.withColumn("rn", F.row_number().over(Window.partitionBy("Ticker").orderBy(col("event_date").desc()))) \
+                             .filter(col("rn") == 1) \
+                             .select("Ticker", col("event_type").alias("last_type"), col("event_date").alias("last_date"))
 
-    # Some events might result in duplicates if ADD dates are too close or identical overlapping chunks
-    # We clean these up by removing nested duplicates: grouping by exact periods.
-    # To keep it robust, any secondary cleanup or window functions could be applied here if needed.
-    # Clean up duplicate Date_end for the same Ticker (overlapping presence)
-    # We want to keep the OLDEST Date_start for each Ticker among instances that have the same Date_end
-    # This deduplicates overlaps where a ticker appears added multiple times in short succession 
-    df_cleaned = df_consolidated.groupBy("Ticker", "Date_end").agg(
-        F.min("Date_start").alias("Date_start")
-    )
-    
-    # Replace NULL Date_end with today's date
-    # Also drop anomalous records where Date_start > Date_end
-    df_final = df_cleaned.withColumn("Date_end", F.coalesce(col("Date_end"), F.current_date())) \
-                         .filter(col("Date_start") <= col("Date_end")) \
-                         .select("Ticker", "Date_start", "Date_end")
+    # Join with Latest to detect new ADDS/REMOVES
+    drift_adds = latest_tickers.join(last_state, "Ticker", "left") \
+        .filter((col("last_type").isNull()) | (col("last_type") == "REMOVE")) \
+        .select("Ticker", today.alias("event_date"), lit("ADD").alias("event_type"))
 
+    drift_removes = last_state.join(latest_tickers, "Ticker", "left_anti") \
+        .filter(col("last_type") == "ADD") \
+        .select("Ticker", today.alias("event_date"), lit("REMOVE").alias("event_type"))
+
+    n_adds = drift_adds.count()
+    if n_adds > 0:
+        logger.info(f"🆕 Found {n_adds} new tickers to add to S&P 500 history.")
+        
+    n_removes = drift_removes.count()
+    if n_removes > 0:
+        logger.info(f"❌ Found {n_removes} tickers to remove from S&P 500 history.")
+
+    # 5. Final event union
+    final_events = consolidated.select("Ticker", "event_date", "event_type") \
+                               .unionByName(drift_adds) \
+                               .unionByName(drift_removes) \
+                               .dropDuplicates(["Ticker", "event_date", "event_type"])
+
+    # 6. Re-consolidate to build (Date_start, Date_end)
+    final_window = Window.partitionBy("Ticker").orderBy("event_date")
+    
+    df_history_final = final_events.withColumn("next_date", lead("event_date").over(final_window)) \
+                                   .withColumn("next_type", lead("event_type").over(final_window)) \
+                                   .filter(col("event_type") == "ADD") \
+                                   .select(
+                                       col("Ticker"),
+                                       col("event_date").alias("Date_start"),
+                                       when(col("next_type") == "REMOVE", col("next_date")).otherwise(None).alias("Date_end")
+                                   )
+
+    # Clean up and exclude specific tickers as per your requirement
     tickers_to_exclude = ['EF', 'JBL', 'HP', 'TMUS', 'FMCC', 'FNMA', 'CTX', 'AET', 'MXIM', 'PARA']
-    df_final = df_final.filter(~col("Ticker").isin(tickers_to_exclude))
+    df_final = df_history_final.filter(~col("Ticker").isin(tickers_to_exclude))
 
     return df_final
+
 
 
 def save_history_to_lake(df, output_path):

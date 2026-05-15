@@ -93,6 +93,7 @@ class Paths:
     SP500_STOCK_PRICES_SILVER = f"{SILVER}/sp500_stock_prices"
     SP500_STOCK_PRICES_WEEKLY_SILVER = f"{SILVER}/sp500_stock_prices_weekly"
     SP500_STOCK_PRICES_MONTHLY_SILVER = f"{SILVER}/sp500_stock_prices_monthly"
+    TICKERS_2B_CONSOLIDATED_HISTORY = f"{SILVER}/tickers_2b_consolidated_history"
     
     
     # Specific Tables GOLD

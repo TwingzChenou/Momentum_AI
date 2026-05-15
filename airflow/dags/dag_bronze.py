@@ -31,11 +31,17 @@ with DAG(
         # Exécute un script Python pour récupérer la liste des actifs de l'indice S&P 500
     )
 
-    # 2. Consolidation de l'historique S&P 500
+    # 2. Consolidation des historiques (Drift Detection)
     task_consolidate_history = BashOperator(
         task_id='consolidate_sp500_history',
         bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/sp500_consolidated_history.py',
         # Exécute un script Python pour consolider l'historique des actifs de l'indice S&P 500
+    )
+
+    task_consolidate_history_2b = BashOperator(
+        task_id='consolidate_2b_history',
+        bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/tickers_2b_consolidated_history.py',
+        # Exécute un script Python pour consolider l'historique de l'univers > $2B
     )
 
     # 3. Ingestion Parallèle des prix
@@ -73,7 +79,7 @@ with DAG(
 
     # Dépendances logiques
     # Branche 2B
-    task_fetch_tickers_2b >> task_ingest_stocks_2b
+    task_fetch_tickers_2b >> task_consolidate_history_2b >> task_ingest_stocks_2b
     
     # Branche SP500
     task_fetch_sp500_list >> task_consolidate_history >> task_ingest_sp500_stocks

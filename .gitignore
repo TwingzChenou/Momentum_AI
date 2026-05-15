@@ -1,0 +1,70 @@
+# Data Files
+data/
+*.parquet
+*.csv
+*.h5
+*.pkl
+
+# Git & OS
+.gitignore
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.ipynb_checkpoints/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+*.bak/
+anaconda3/
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/dbt_modules/
+dbt/package-lock.yml
+dbt/logs/
+
+# Spark & Metastore
+spark-warehouse/
+metastore_db/
+derby.log
+jars/
+checkpoint*
+
+# Configuration
+config/keys_gcp/
+
+# ML & Logs
+mlruns/
+mlflow.db
+logs/
+keras_tuner_dir/
+
+# Airflow
+airflow/logs/
+airflow/airflow.*
+airflow/*.db
+airflow/*.pid
+
+# Great Expectations temporary files
+gx/expectations/suite_*.json
+gx/validation_definitions/val_*.json
+gx/uncommitted/
+gx/checkpoints/
+
+# Scratch and temporary scripts
+scratch/
+
+# Temporary scratch files
+scratch/
+*.log

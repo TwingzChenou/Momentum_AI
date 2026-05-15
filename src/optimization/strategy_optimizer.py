@@ -107,8 +107,9 @@ def objective_silver(trial, sp500_raw, df_etf_raw, df_stocks_raw):
         'stock_mom_period': trial.suggest_categorical('stock_mom_period', [4, 13, 26, 52]),
         'etf_mom_period': trial.suggest_categorical('etf_mom_period', [4, 13, 26, 52]),
         'top_n': trial.suggest_int('top_n', 5, 30, step=5),
-        'rebalance_freq': trial.suggest_categorical('rebalance_freq', ['W', 'M', 'Q']),
+        'rebalance_freq': trial.suggest_categorical('rebalance_freq', ['W', 'M', 'Q', '6M', '1Y']),
         'buffer_n': trial.suggest_int('buffer_n', 5, 30, step=5),
+        'hard_stop_loss': trial.suggest_float('hard_stop_loss', 0.10, 0.20, step=0.05),
         'leverage': 1.0, 'cash_yield': 0.04, 'margin_rate': 0.06, 'fees': 0.001
     }
 

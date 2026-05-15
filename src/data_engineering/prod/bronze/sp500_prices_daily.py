@@ -15,90 +15,104 @@ import pyspark.sql.functions as F
 
 def get_incremental_tasks(spark):
     """
-    Determines which tickers need updates.
-    Logic: 
-    - ONLY current members (503 tickers).
-    - Start date is at least March 19, 2026.
+    Determines which tickers need updates, including historical members to avoid survivor bias.
     """
-    logger.info(f"📡 Calculating incremental tasks (STRICT: 503 Current Members)...")
+    logger.info(f"📡 Calculating incremental tasks (NO BIAS: 1173+ Historical Members)...")
     today = datetime.today().date()
     
-    # 1. Load Current Members List
-    df_latest = spark.read.format("delta").load(Paths.SP500_LATEST_TICKERS).select(F.col("symbol").alias("Ticker"))
+    # 1. Load ALL Members (Current + Historical)
+    try:
+        df_history = spark.read.format("delta").load(Paths.SP500_CONSOLIDATED_HISTORY) \
+                          .select("Ticker", "Date_start", "Date_end")
+        logger.info(f"✅ Loaded {df_history.count()} unique tickers from consolidated history.")
+    except Exception as e:
+        logger.error(f"❌ Could not load history: {e}")
+        return []
     
-    global_max_date = None
+    # 2. Get existing max dates
     try:
         df_existing = spark.read.format("delta").load(Paths.SP500_STOCK_PRICES)
         if "symbol" in df_existing.columns:
             df_existing = df_existing.withColumnRenamed("symbol", "Ticker").withColumnRenamed("date", "Date")
-        
         df_max = df_existing.groupBy("Ticker").agg(F.max("Date").alias("LastDate"))
     except:
         df_max = spark.createDataFrame([], "Ticker string, LastDate date")
 
-    # On fixe la date de début minimale au 1er Janvier 2020 pour garantir un historique solide aux nouveaux tickers
-    start_floor = datetime(2020, 1, 1).date()
+    # 3. Join History with existing data
+    df_tasks = df_history.join(df_max, on="Ticker", how="left")
     
-    # 2. Join (Left Join to keep ALL current members)
-    df_tasks = df_latest.join(df_max, on="Ticker", how="left")
+    # 4. Global floor: 1976
+    global_floor = datetime(1976, 1, 1).date()
     
-    # 3. Calculate Effective Start
-    df_tasks = df_tasks.withColumn("EffectiveStart", 
+    # 5. Calculate Effective Start and End
+    # - Start: max(global_floor, Date_start, LastDate + 1)
+    # - End: min(today, Date_end if not null)
+    df_tasks = df_tasks.withColumn("Start", 
         F.when(F.col("LastDate").isNotNull(), F.date_add(F.col("LastDate"), 1))
-         .otherwise(F.lit(start_floor))
+         .otherwise(F.greatest(F.lit(global_floor), F.col("Date_start")))
     )
     
-    # Final check: Start must be >= start_floor
-    df_tasks = df_tasks.withColumn("EffectiveStart", 
-        F.when(F.col("EffectiveStart") < F.lit(start_floor), F.lit(start_floor)).otherwise(F.col("EffectiveStart"))
+    df_tasks = df_tasks.withColumn("End", 
+        F.when(F.col("Date_end").isNotNull(), F.col("Date_end"))
+         .otherwise(F.lit(today))
     )
     
-    # Final filter: Start < Today
-    df_tasks = df_tasks.filter(F.col("EffectiveStart") < F.lit(today))
+    # Filter: Start < End
+    df_tasks = df_tasks.filter(F.col("Start") < F.col("End"))
     
-    tasks = [(row['Ticker'], str(row['EffectiveStart'])) for row in df_tasks.collect()]
+    tasks = [(row['Ticker'], str(row['Start']), str(row['End'])) for row in df_tasks.collect()]
     return tasks
 
 def fetch_yf_data_incremental(tasks, chunk_size=5):
-    """Fetches data for specific tickers starting from their respective last dates."""
-    all_data = []
-    end_date = datetime.today().strftime('%Y-%m-%d')
+    """Fetches data with User-Agent rotation and medium-conservative timing."""
+    import requests
+    import random
     
-    # To keep it efficient, we group by start_date
-    from collections import defaultdict
-    date_groups = defaultdict(list)
-    for ticker, start_date in tasks:
-        date_groups[start_date].append(ticker)
-        
-    for start_date, tickers in date_groups.items():
-        logger.info(f"📅 Downloading {len(tickers)} tickers starting from {start_date}...")
-        
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+    ]
+    
+    session = requests.Session()
+    all_dfs = []
+    task_groups = {}
+    for ticker, start, end in tasks:
+        key = (start, end)
+        if key not in task_groups: task_groups[key] = []
+        task_groups[key].append(ticker)
+
+    for (start, end), tickers in task_groups.items():
+        logger.info(f"📅 Fetching {len(tickers)} tickers for range {start} to {end}")
         for i in range(0, len(tickers), chunk_size):
             chunk = tickers[i:i + chunk_size]
+            session.headers.update({"User-Agent": random.choice(user_agents)})
             
-            for attempt in range(3):
+            success = False
+            for attempt in range(5):
                 try:
-                    df = yf.download(tickers=chunk, start=start_date, end=end_date, interval="1d", group_by="ticker", auto_adjust=False, progress=False, threads=False)
+                    df = yf.download(chunk, start=start, end=end, group_by='ticker', threads=False, progress=False, session=session)
                     if not df.empty:
-                        # Aplatissement systématique du MultiIndex (Ticker, Metric) -> colonnes simples
-                        if isinstance(df.columns, pd.MultiIndex):
+                        if len(chunk) > 1:
                             df = df.stack(level=0, future_stack=True).rename_axis(['Date', 'Ticker']).reset_index()
                         else:
-                            # Cas rare où ce n'est pas un MultiIndex
                             df['Ticker'] = chunk[0]
                             df = df.reset_index()
-                        
-                        all_data.append(df)
+                        all_dfs.append(df)
+                        success = True
                         break
                     else:
-                        time.sleep(5)
+                        success = True 
+                        break
                 except Exception as e:
-                    logger.error(f"❌ Error: {e}")
-                    time.sleep(10)
-            time.sleep(2)
+                    wait = (attempt + 1) * 30
+                    logger.warning(f"⚠️ Attempt {attempt+1} failed for {chunk}: {e}. Retrying in {wait}s...")
+                    time.sleep(wait)
             
-    if not all_data: return pd.DataFrame()
-    return pd.concat(all_data, ignore_index=True)
+            if i + chunk_size < len(tickers):
+                time.sleep(5) # Polite wait of 5s between chunks
+
+    return pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()
 
 def main():
     start_time = time.time()

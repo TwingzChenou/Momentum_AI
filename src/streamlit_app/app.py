@@ -239,7 +239,7 @@ def compute_backtest_cached(start_date_str, leverage, config_dict):
 st.sidebar.title("⚙️ Paramètres de Backtest")
 
 # Dates limites
-min_date = datetime.date(2000, 1, 1)
+min_date = datetime.date(1976, 7, 1)
 max_date = datetime.date.today()
 default_start = datetime.date(2010, 1, 1)
 
@@ -268,7 +268,7 @@ if c5.button("5Y", use_container_width=True): set_start_date(1825)
 if c6.button("10Y", use_container_width=True): set_start_date(3650)
 
 # Ligne 3: Since Everything
-if st.sidebar.button("Since 2000 (Max)", use_container_width=True): set_start_date("since")
+if st.sidebar.button("Since 1976 (Max)", use_container_width=True): set_start_date("since")
 
 st.sidebar.write("---")
 
