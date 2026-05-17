@@ -176,10 +176,14 @@ class RegimeSwitchingMomentumBacktester:
             
             # On ne recalcule que si les colonnes manquent
             if 'SMA_fast' not in df_stocks.columns or 'Momentum_XM' not in df_stocks.columns:
-                logger.info("⚙️ Calcul local des indicateurs Stocks...")
+                logger.info("⚙️ Calcul local des indicateurs Stocks (SMA, Mom, ATR, ADX)...")
                 df_stocks['SMA_fast'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_fast', 26), fillna=True))
                 df_stocks['SMA_slow'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_slow', 50), fillna=True))
                 df_stocks['Momentum_XM'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: x.pct_change(self.config.get('stock_mom_period', 13)))
+                
+                # Compute ATR and ADX properly per group
+                df_stocks['ATR'] = df_stocks.groupby('Ticker').apply(lambda x: ta.volatility.AverageTrueRange(high=x['High'], low=x['Low'], close=x['Close'], window=14, fillna=True).average_true_range()).reset_index(level=0, drop=True)
+                df_stocks['ADX'] = df_stocks.groupby('Ticker').apply(lambda x: ta.trend.ADXIndicator(high=x['High'], low=x['Low'], close=x['Close'], window=14, fillna=True).adx()).reset_index(level=0, drop=True)
             
             # Filtres techniques (On utilise ADX et ATR de BigQuery si possible)
             cond_trend = (df_stocks['SMA_fast'] > df_stocks['SMA_slow']) & (df_stocks['Close'] > df_stocks['SMA_slow'])
@@ -218,7 +222,9 @@ class RegimeSwitchingMomentumBacktester:
         # Dictionnaires pour accès rapide O(1)
         logger.info("📦 Indexation des données en mémoire...")
         stocks_indexed = stocks.drop_duplicates(subset=['Date', 'Ticker']).set_index(['Date', 'Ticker'])
-        s_data = stocks_indexed[['Close', 'SMA_slow', 'Momentum_XM', 'Eligible']].to_dict('index')
+        s_cols = ['Close', 'SMA_slow', 'Momentum_XM', 'Eligible']
+        if 'ATR' in stocks.columns: s_cols.append('ATR')
+        s_data = stocks_indexed[s_cols].to_dict('index')
         del stocks_indexed
         
         etfs_indexed = etfs.drop_duplicates(subset=['Date', 'Ticker']).set_index(['Date', 'Ticker'])
@@ -238,9 +244,9 @@ class RegimeSwitchingMomentumBacktester:
             regime = sp500.loc[d, 'Regime']
             if isinstance(regime, pd.Series): regime = regime.iloc[0]
             
-            # --- 1. MAINTENANCE QUOTIDIENNE (Trend Exit & Hard Stop-Loss) ---
+            # --- 1. MAINTENANCE QUOTIDIENNE (Trend Exit & Trailing ATR Stop-Loss) ---
             surviving = []
-            stop_loss_threshold = self.config.get('hard_stop_loss', 0.20)
+            atr_stop_multiple = self.config.get('atr_stop_multiple', 3.0)
             
             for pos in current_portfolio:
                 t, ptype = pos['Ticker'], pos['Type']
@@ -250,21 +256,26 @@ class RegimeSwitchingMomentumBacktester:
                     row = s_data.get((d, t), {})
                     price = row.get('Close')
                     sma = row.get('SMA_slow')
+                    atr = row.get('ATR')
                     
                     if not price or not sma:
                         surviving.append(pos)
                         continue
                     
+                    # Update HighestPrice for Trailing Stop
+                    highest_price = max(pos.get('HighestPrice', price), price)
+                    pos['HighestPrice'] = highest_price
+                    
                     # A. Condition de Tendance (SMA Slow)
                     is_trend_ok = price > sma
                     
-                    # B. Condition de Hard Stop-Loss (-15% depuis l'achat)
+                    # B. Condition de Trailing Stop-Loss dynamique
                     is_stop_loss_triggered = False
-                    if entry_price:
-                        loss_pct = (price / entry_price) - 1
-                        if loss_pct <= -stop_loss_threshold:
+                    if atr and not pd.isna(atr):
+                        stop_price = highest_price - (atr_stop_multiple * atr)
+                        if price < stop_price:
                             is_stop_loss_triggered = True
-                            logger.warning(f"🚨 {d.date()} | STOP-LOSS déclenché sur {t}: {loss_pct*100:.1f}% (Entry: {entry_price:.2f}, Close: {price:.2f})")
+                            logger.warning(f"🚨 {d.date()} | TRAILING STOP ATR déclenché sur {t} (Price: {price:.2f} < Stop: {stop_price:.2f})")
                     
                     if is_trend_ok and not is_stop_loss_triggered:
                         surviving.append(pos)
@@ -314,7 +325,8 @@ class RegimeSwitchingMomentumBacktester:
                                     'Ticker': row['Ticker'], 
                                     'Weight': 0, 
                                     'Type': 'Stock',
-                                    'EntryPrice': row['Close'] # On fixe le prix d'entrée à l'achat
+                                    'EntryPrice': row['Close'], # On fixe le prix d'entrée à l'achat
+                                    'HighestPrice': row['Close'] # Initialisation pour le Trailing Stop
                                 })
                         
                         current_portfolio = kept

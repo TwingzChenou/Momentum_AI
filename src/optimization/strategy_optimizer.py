@@ -109,7 +109,7 @@ def objective_silver(trial, sp500_raw, df_etf_raw, df_stocks_raw):
         'top_n': trial.suggest_int('top_n', 5, 30, step=5),
         'rebalance_freq': trial.suggest_categorical('rebalance_freq', ['W', 'M', 'Q', '6M', '1Y']),
         'buffer_n': trial.suggest_int('buffer_n', 5, 30, step=5),
-        'hard_stop_loss': trial.suggest_float('hard_stop_loss', 0.10, 0.20, step=0.05),
+        'atr_stop_multiple': trial.suggest_float('atr_stop_multiple', 1.0, 5.0, step=0.5),
         'leverage': 1.0, 'cash_yield': 0.04, 'margin_rate': 0.06, 'fees': 0.001
     }
 
@@ -126,7 +126,9 @@ def objective_silver(trial, sp500_raw, df_etf_raw, df_stocks_raw):
             etfs = df_etf_raw[['Ticker', 'Date', 'Close']].copy().sort_values(['Ticker', 'Date'])
 
             # 3. Stocks (Données brutes)
-            stocks = df_stocks_raw[['Ticker', 'Date', 'Close']].copy().sort_values(['Ticker', 'Date'])
+            cols = ['Ticker', 'Date', 'Close']
+            if 'ATR' in df_stocks_raw.columns: cols.append('ATR')
+            stocks = df_stocks_raw[cols].copy().sort_values(['Ticker', 'Date'])
 
             # 4. Simulation
             # Le moteur va lui-même calculer SMA, ADX, ATR et Eligible à chaque trial

@@ -745,5 +745,41 @@ fluent_datasources:
           batch:
             id: ef04d427-635c-4db3-be70-592d8b21edb7
             partitioner:
+  ds_1779027644:
+    type: pandas
+    id: 2a1e8827-c2c2-4617-91e7-e4c489e6db6b
+    assets:
+      asset:
+        type: dataframe
+        id: 82d357b6-7474-4fb9-ae71-ccc2f9df6592
+        batch_metadata: {}
+        batch_definitions:
+          batch:
+            id: 790bd8c8-0433-4845-b028-165ba0998845
+            partitioner:
+  ds_1779027646:
+    type: pandas
+    id: b708fbff-397b-4ff2-8740-503d314fb984
+    assets:
+      asset:
+        type: dataframe
+        id: 2f59e36c-c79a-4f32-9de3-7ad63b1d446d
+        batch_metadata: {}
+        batch_definitions:
+          batch:
+            id: 4f8c081c-e295-47f0-aff7-637bfb6b682f
+            partitioner:
+  ds_1779027652:
+    type: pandas
+    id: 904e02fd-4a12-4aa5-8390-d119a619cc02
+    assets:
+      asset:
+        type: dataframe
+        id: 39cc8088-abcc-4f67-a73e-6b2d76f3479d
+        batch_metadata: {}
+        batch_definitions:
+          batch:
+            id: 38b76d7e-d0be-4707-8dbc-083e57fb3c9b
+            partitioner:
 analytics_enabled:
 data_context_id: a70559bf-52f2-4808-8244-f06c9971331d

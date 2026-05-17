@@ -5,7 +5,8 @@ delta-spark==3.2.1
 # Data Analysis & Finance
 pandas
 numpy
-yfinance
+yfinance>=1.3.0
+curl_cffi
 tradingview-screener
 ta
 plotly

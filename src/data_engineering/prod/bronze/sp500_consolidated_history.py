@@ -105,24 +105,30 @@ def process_sp500_consolidated_history(spark):
 
 
 
-def save_history_to_lake(df, output_path):
+def save_history_to_lake(df, output_path, spark):
     """
-    Saves the consolidated composition DataFrame to Delta Lake.
+    Saves the consolidated composition DataFrame to Delta Lake using MERGE to preserve history.
     """
-    logger.info(f"💾 Saving Consolidated History to {output_path}...")
+    from delta.tables import DeltaTable
+    logger.info(f"💾 Merging Consolidated History into {output_path}...")
     
     try:
-        # Write to Delta (Overwrite mode for full history refresh)
-        df.write.format("delta") \
-            .mode("overwrite") \
-            .save(output_path)
+        if DeltaTable.isDeltaTable(spark, output_path):
+            dt = DeltaTable.forPath(spark, output_path)
+            dt.alias("target").merge(
+                df.alias("source"),
+                "target.Ticker = source.Ticker AND target.Date_start = source.Date_start"
+            ).whenMatchedUpdateAll() \
+             .whenNotMatchedInsertAll() \
+             .execute()
+            logger.success("✅ Success! History merged (Upsert).")
+        else:
+            df.write.format("delta").mode("overwrite").save(output_path)
+            logger.success("✅ Success! History table created.")
             
-        logger.success("✅ Success! Consolidated History saved.")
-        
     except Exception as e:
         logger.error(f"❌ Error saving to Lake: {e}")
         raise e
-
 
 def main():
     # Setup logging
@@ -132,31 +138,45 @@ def main():
     logger.info("🚀 Starting Job: SP500 Consolidated History Generation")
 
     spark = None
-
     try:
-        # 1. Create Spark Session
-        logger.info("🚀 Creating Spark Session...")
         spark = create_spark_session(app_name="SP500_Consolidated_History")
 
-        # 2. Process Data
-        df_consolidated = process_sp500_consolidated_history(spark)
-
-        # Show a preview
-        active_count = df_consolidated.filter(col("Date_end").isNull()).count()
-        logger.info(f"📊 Processed {df_consolidated.count()} total periods. {active_count} active tickers without Date_end.")
-        df_consolidated.show(10, truncate=False)
-
-        # 3. Save Data
-        save_history_to_lake(df_consolidated, Paths.SP500_CONSOLIDATED_HISTORY)
+        # 1. Load Existing History as Base
+        logger.info("📡 Loading existing base history...")
+        df_base = spark.read.format("delta").load(Paths.SP500_CONSOLIDATED_HISTORY)
+        
+        # 2. Detect drift from LATEST
+        df_latest = spark.read.format("delta").load(Paths.SP500_LATEST_TICKERS)
+        latest_tickers = df_latest.select(F.col("symbol").alias("Ticker")).distinct()
+        
+        # Current active tickers in base (Date_end is NULL)
+        active_in_base = df_base.filter(F.col("Date_end").isNull())
+        
+        # New ADDS: in Latest but NOT in active_in_base
+        new_adds = latest_tickers.join(active_in_base, "Ticker", "left_anti") \
+                                 .withColumn("Date_start", F.current_date()) \
+                                 .withColumn("Date_end", F.lit(None).cast("date"))
+        
+        # New REMOVES: in active_in_base but NOT in Latest
+        new_removes = active_in_base.join(latest_tickers, "Ticker", "left_anti") \
+                                    .withColumn("Date_end", F.current_date())
+        
+        # 3. Combine
+        # For removes, we need to update the existing row, not add a new one. 
+        # So we union new_adds and the UPDATED rows for new_removes.
+        df_updates = new_adds.unionByName(new_removes)
+        
+        if df_updates.count() > 0:
+            logger.info(f"🔄 Detected {df_updates.count()} changes to apply.")
+            save_history_to_lake(df_updates, Paths.SP500_CONSOLIDATED_HISTORY, spark)
+        else:
+            logger.success("✅ History is already up to date with Latest tickers.")
 
     except Exception as e:
         logger.critical(f"❌ Critical Error: {e}")
         sys.exit(1)
-
     finally:
-        if spark:
-            spark.stop()
-            logger.info("🛑 Spark Session stopped.")
+        if spark: spark.stop()
 
 if __name__ == "__main__":
     main()

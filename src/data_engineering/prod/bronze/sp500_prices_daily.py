@@ -63,18 +63,8 @@ def get_incremental_tasks(spark):
     tasks = [(row['Ticker'], str(row['Start']), str(row['End'])) for row in df_tasks.collect()]
     return tasks
 
-def fetch_yf_data_incremental(tasks, chunk_size=5):
-    """Fetches data with User-Agent rotation and medium-conservative timing."""
-    import requests
-    import random
-    
-    user_agents = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-    ]
-    
-    session = requests.Session()
+def fetch_yf_data_incremental(tasks, chunk_size=100):
+    """Fetches data using yfinance 1.3.0 stealth engine (chunked mode)."""
     all_dfs = []
     task_groups = {}
     for ticker, start, end in tasks:
@@ -83,34 +73,42 @@ def fetch_yf_data_incremental(tasks, chunk_size=5):
         task_groups[key].append(ticker)
 
     for (start, end), tickers in task_groups.items():
-        logger.info(f"📅 Fetching {len(tickers)} tickers for range {start} to {end}")
-        for i in range(0, len(tickers), chunk_size):
+        n_tickers = len(tickers)
+        n_chunks = (n_tickers + chunk_size - 1) // chunk_size
+        logger.info(f"📅 Fetching {n_tickers} tickers ({n_chunks} chunks) for range {start} to {end}")
+        
+        for i in range(0, n_tickers, chunk_size):
             chunk = tickers[i:i + chunk_size]
-            session.headers.update({"User-Agent": random.choice(user_agents)})
+            current_chunk = (i // chunk_size) + 1
+            logger.info(f"🚀 [{current_chunk}/{n_chunks}] Downloading chunk: {chunk}...")
             
             success = False
-            for attempt in range(5):
+            for attempt in range(3):
                 try:
-                    df = yf.download(chunk, start=start, end=end, group_by='ticker', threads=False, progress=False, session=session)
+                    df = yf.download(chunk, start=start, end=end, threads=True, progress=False)
                     if not df.empty:
+                        # Handle MultiIndex if multiple tickers returned
                         if len(chunk) > 1:
-                            df = df.stack(level=0, future_stack=True).rename_axis(['Date', 'Ticker']).reset_index()
+                            df = df.stack(level=1, future_stack=True).rename_axis(['Date', 'Ticker']).reset_index()
                         else:
-                            df['Ticker'] = chunk[0]
                             df = df.reset_index()
+                            df['Ticker'] = chunk[0]
+                        
                         all_dfs.append(df)
+                        logger.success(f"✅ Chunk {current_chunk} recovered ({len(df)} rows).")
                         success = True
                         break
                     else:
+                        logger.warning(f"⚠️ Chunk {current_chunk} empty (potential delistings).")
                         success = True 
                         break
                 except Exception as e:
-                    wait = (attempt + 1) * 30
-                    logger.warning(f"⚠️ Attempt {attempt+1} failed for {chunk}: {e}. Retrying in {wait}s...")
+                    wait = (attempt + 1) * 10
+                    logger.warning(f"❌ Chunk {current_chunk} failed: {e}. Retrying in {wait}s...")
                     time.sleep(wait)
             
-            if i + chunk_size < len(tickers):
-                time.sleep(5) # Polite wait of 5s between chunks
+            # Polite wait
+            time.sleep(3)
 
     return pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()
 
@@ -135,7 +133,7 @@ def main():
         # 2. Fetch Data
         logger.info("🌐 Étape 2 : Téléchargement des données depuis Yahoo Finance...")
         fetch_start = time.time()
-        df_new = fetch_yf_data_incremental(tasks, chunk_size=2)
+        df_new = fetch_yf_data_incremental(tasks, chunk_size=100)
         fetch_duration = time.time() - fetch_start
         
         if df_new.empty:
@@ -146,22 +144,55 @@ def main():
         
         # 3. Préparation des données
         logger.info("🛠️ Étape 3 : Transformation et Standardisation des colonnes...")
+        
+        # Flatten columns if MultiIndex (robust version)
+        if isinstance(df_new.columns, pd.MultiIndex):
+            df_new.columns = [col[0] if isinstance(col, tuple) else col for col in df_new.columns]
+        
+        # Standardize column names (remove whitespace)
+        df_new.columns = [str(c).strip() for c in df_new.columns]
+        
+        # DEDUPLICATE COLUMNS: If we have multiple 'Close' or 'Ticker', keep the first one
+        if df_new.columns.duplicated().any():
+            logger.warning(f"⚠️ Duplicate columns detected: {list(df_new.columns[df_new.columns.duplicated()])}. Keeping first occurrences.")
+            df_new = df_new.loc[:, ~df_new.columns.duplicated()]
+            
         final_df = pd.DataFrame()
         
-        # Mapping robuste et typage forcé pour éviter les erreurs Spark (CANNOT_ACCEPT_OBJECT_IN_TYPE)
-        final_df['Ticker'] = df_new['Ticker']
+        # Check for Ticker column
+        if 'Ticker' not in df_new.columns:
+            logger.error(f"❌ Column 'Ticker' missing! Available columns: {list(df_new.columns)}")
+            # Attempt to find it (case insensitive)
+            for c in df_new.columns:
+                if c.lower() == 'ticker':
+                    df_new.rename(columns={c: 'Ticker'}, inplace=True)
+                    break
+        
+        # Mapping robuste
+        final_df['Ticker'] = df_new['Ticker'].astype(str)
         final_df['Date'] = pd.to_datetime(df_new['Date']).dt.date
         
         # Forcer les prix en float (DoubleType)
-        for col in ['Open', 'High', 'Low', 'Close']:
-            final_df[col] = pd.to_numeric(df_new[col], errors='coerce').astype(float)
+        price_cols = ['Open', 'High', 'Low', 'Close']
+        for col in price_cols:
+            if col in df_new.columns:
+                final_df[col] = pd.to_numeric(df_new[col], errors='coerce').astype(float)
+            else:
+                final_df[col] = 0.0 # Safety default
         
-        final_df['AdjClose'] = pd.to_numeric(df_new['Adj Close'] if 'Adj Close' in df_new.columns else df_new['Close'], errors='coerce').astype(float)
+        # AdjClose specific handling
+        if 'Adj Close' in df_new.columns:
+            final_df['AdjClose'] = pd.to_numeric(df_new['Adj Close'], errors='coerce').astype(float)
+        else:
+            final_df['AdjClose'] = final_df['Close']
         
-        # Forcer le Volume en int (LongType) - Remplissage des NaNs par 0 pour permettre la conversion
-        final_df['Volume'] = pd.to_numeric(df_new['Volume'], errors='coerce').fillna(0).astype(int)
+        # Volume handling
+        if 'Volume' in df_new.columns:
+            final_df['Volume'] = pd.to_numeric(df_new['Volume'], errors='coerce').fillna(0).astype('int64')
+        else:
+            final_df['Volume'] = 0
         
-        logger.info(f"✨ Colonnes standardisées et typées : {list(final_df.columns)}")
+        logger.info(f"✨ Colonnes standardisées : {list(final_df.columns)}")
         
         # 4. Sauvegarde Sécurisée (AUCUN OVERWRITE AUTORISÉ)
         from pyspark.sql.types import StructType, StructField, StringType, DateType, DoubleType, LongType
