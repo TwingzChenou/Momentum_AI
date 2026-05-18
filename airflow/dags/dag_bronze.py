@@ -26,7 +26,7 @@ with DAG(
     )
 
     task_fetch_sp500_list = BashOperator(
-        task_id='fetch_sp500_list_fmp',
+        task_id='fetch_sp500_list',
         bash_command=f'{PREFIX_CMD} && python3 /opt/airflow/src/data_engineering/prod/bronze/sp500_list_ingestion.py',
         # Exécute un script Python pour récupérer la liste des actifs de l'indice S&P 500
     )

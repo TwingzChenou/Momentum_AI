@@ -21,7 +21,6 @@ from config.config_spark import Paths
 
 # Load environment variables
 load_dotenv()
-FMP_API_KEY = os.getenv("FMP_API_KEY")
 
 def get_yf_symbol(symbol, exchange):
     """

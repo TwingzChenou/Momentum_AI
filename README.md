@@ -33,7 +33,7 @@ graph TD
     %% Source Ingestion
     subgraph Ingestion [1. Source Layer]
         YF[Yahoo Finance API]
-        FMP[Financial Modeling Prep API]
+        TV[TradingView & Wikipedia]
     end
 
     %% Data Lake (Delta Lake on GCS)
@@ -59,7 +59,7 @@ graph TD
 
     %% Connections
     YF -->|Parallel Ingestion| Bronze
-    FMP -->|Fundamental Statements| Bronze
+    TV -->|Constituents & Metadata| Bronze
     
     Bronze -->|Schema Validation & Parsing| Spark
     Spark -->|Data Quality Contracts| GE
@@ -123,9 +123,6 @@ Here is what your finalized local `.env` should look like:
 # ==============================================================================
 # Momentum AI - Production Environment Configuration (.env)
 # ==============================================================================
-
-# --- FINANCIAL MODELING PREP API ---
-FMP_API_KEY="your_fmp_api_key_placeholder"  
 
 # --- GOOGLE CLOUD PLATFORM (GCP) CONFIGURATION ---
 GCP_PROJECT_ID="finance-ml-project-486410"
@@ -194,14 +191,14 @@ ruff format src/
 ## 5. Testing Strategy
 
 The pipeline features a robust testing suite divided into:
-1. **Integration Tests**: Auditing asynchronous connectivity and concurrency handling for third-party financial APIs (Financial Modeling Prep & Yahoo Finance) using `aiohttp` and `asyncio`.
+1. **Integration Tests**: Auditing asynchronous connectivity and concurrency handling for third-party financial APIs (Yahoo Finance) using `aiohttp` and `asyncio`.
 2. **Strategy Unit Tests**: Simulating financial calculations, including position weights, transactional costs, and trailing ATR stop loss triggers.
 
 ### Running the Test Suite
 
-To run the concurrent API connectivity diagnostic suite:
+To run the standard data quality audit script:
 ```bash
-python3 tests/api_fmp_test.py
+python3 scripts/maintenance/run_data_audit.py
 ```
 
 To run the unit tests and generate a full coverage report:

@@ -5,8 +5,7 @@ from dotenv import load_dotenv
 # This looks for a .env file and loads it into os.environ
 load_dotenv() 
 
-# 2. Fetch the basics
-FMP_API_KEY = os.getenv("FMP_API_KEY")
+# FMP_API_KEY = os.getenv("FMP_API_KEY") # Deprecated - FMP is no longer used
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "finance-ml-project-486410")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "finance-data-lake-unique-id")
 BQ_DATASET = os.getenv("BQ_DATASET", "Dataset_Strategy_Momentum")
