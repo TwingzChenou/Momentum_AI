@@ -18,8 +18,7 @@ with DAG(
     tags=['prod', 'silver', 'spark'],
 ) as dag:
 
-    # Tâche unifiée en Pure Spark-SQL
-    # Remplace les 12 tâches précédentes (dbt daily, spark weekly, spark monthly pour chaque type)
+    # Unified task performing high-performance PySpark resampling on all asset groups
     unified_resampling = BashOperator(
         task_id='unified_silver_resampling',
         bash_command=f'{PREFIX_SPARK} && python3 {AIRFLOW_HOME}/src/data_engineering/prod/silver/resample_all_spark.py',

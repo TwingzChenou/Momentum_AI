@@ -29,7 +29,6 @@ services:
       - ../config:/opt/airflow/config  # Monte le répertoire config
       - ../data:/opt/airflow/data  # Monte le répertoire data
       - ../scripts:/opt/airflow/scripts  # Monte le répertoire scripts
-      - ../dbt:/opt/airflow/dbt  # Monte le répertoire dbt
       - ../.env:/opt/airflow/.env  # Monte le fichier .env
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow  # Connexion à la base de données PostgreSQL
@@ -58,7 +57,6 @@ services:
       - ../config:/opt/airflow/config  # Monte le répertoire config
       - ../data:/opt/airflow/data  # Monte le répertoire data
       - ../scripts:/opt/airflow/scripts  # Monte le répertoire scripts
-      - ../dbt:/opt/airflow/dbt  # Monte le répertoire dbt
       - ../.env:/opt/airflow/.env  # Monte le fichier .env
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow  # Connexion à la base de données PostgreSQL

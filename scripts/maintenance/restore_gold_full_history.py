@@ -35,8 +35,8 @@ def main():
         atr_p=4   # Force le nouveau ATR 4
     )
     
-    # Ajout du flag Eligible (Logic dbt portée en Spark)
-    # Tendance : Close > SMA_slow et SMA_fast > SMA_slow
+    # Add the Eligibility flag based on:
+    # Trend: Close > SMA_slow and SMA_fast > SMA_slow
     # Force : ADX > Seuil (20 par défaut)
     # Risque : ATR_pct < Seuil (20% par défaut)
     df_stocks = df_stocks.withColumn("Eligible", 

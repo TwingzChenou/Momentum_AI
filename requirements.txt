@@ -28,6 +28,4 @@ mlflow
 joblib
 optuna
 google-cloud-storage
-dbt-duckdb
-dbt-core
 deltalake

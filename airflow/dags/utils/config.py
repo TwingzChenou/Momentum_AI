@@ -4,8 +4,6 @@ from airflow.utils.email import send_email
 
 # --- PATHS & ENVIRONMENT ---
 AIRFLOW_HOME = os.getenv('AIRFLOW_HOME', '/opt/airflow')
-DBT_DIR = f"{AIRFLOW_HOME}/dbt"
-DBT_BIN = "/home/airflow/.local/bin/dbt"
 GCP_KEY = "/opt/airflow/config/keys_gcp/finance-ml-project-486410-f5aa9a641051.json"
 BUCKET_NAME = "finance-data-lake-unique-id"
 
@@ -31,11 +29,6 @@ PREFIX_SPARK = (
     f'export GCP_KEY_PATH={GCP_KEY}'
 )
 
-PREFIX_DBT = (
-    f"export GCS_ACCESS_KEY_ID=$(grep GCS_ACCESS_KEY_ID {AIRFLOW_HOME}/.env | cut -d'=' -f2 | tr -d '\" ') && "
-    f"export GCS_SECRET_ACCESS_KEY=$(grep GCS_SECRET_ACCESS_KEY {AIRFLOW_HOME}/.env | cut -d'=' -f2 | tr -d '\" ') && "
-    f"export BUCKET_NAME=\"{BUCKET_NAME}\""
-)
 
 # --- AIRFLOW CALLBACKS ---
 def on_failure_callback(context):

@@ -14,8 +14,7 @@ with DAG(
     tags=['prod', 'gold', 'spark'],
 ) as dag:
 
-    # Tâche unifiée en Pure Spark-SQL
-    # Remplace dbt run, dbt test et l'export manuel vers BigQuery
+    # Unified task computing technical features and syncing with BigQuery
     generate_features = BashOperator(
         task_id='generate_indicators_gold_spark',
         bash_command=f'{PREFIX_SPARK} && python3 {AIRFLOW_HOME}/src/data_engineering/prod/gold/compute_gold_spark.py',

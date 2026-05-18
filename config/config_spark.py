@@ -110,7 +110,7 @@ class Paths:
     SP500_MOMENTUM_VALUE_PROFITABLE_GROWTH_CRASH_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_value_profitable_growth_crash_weekly"
     SP500_MOMENTUM_VALUE_PROFITABLE_GROWTH_SURPRISE_CRASH_WEEKLY_GOLD = f"{GOLD}/sp500_momentum_value_profitable_growth_surprise_crash_weekly"
     
-    # Gold Features (utilisés par dbt)
+    # Gold Features (used for strategy backtesting and dashboards)
     STOCK_FEATURES_GOLD = f"{GOLD}/stock_features"
     ETF_FEATURES_GOLD = f"{GOLD}/etf_features"
     INDEX_FEATURES_GOLD = f"{GOLD}/sp500_index_features"

@@ -81,7 +81,7 @@ def run_optimization(n_trials=50):
             mlflow.log_params(study.best_params)
             mlflow.log_metric("calmar", study.best_value)
 
-            # --- EXPORT POUR DBT ---
+            # --- EXPORT BEST PARAMETERS FOR STREAMLIT ---
             import json
             config_path = os.path.join(os.getcwd(), "config/best_strategy_params.json")
             os.makedirs(os.path.dirname(config_path), exist_ok=True)

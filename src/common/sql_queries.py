@@ -1,6 +1,5 @@
 """
-Ce module centralise toutes les requêtes Spark-SQL utilisées dans le pipeline de données.
-Il remplace la logique précédemment stockée dans dbt.
+Ce module centralise toutes les requêtes Spark-SQL utilisées dans le pipeline de données Momentum AI.
 """
 
 # Requête pour le calcul des indicateurs techniques (Gold Layer)
