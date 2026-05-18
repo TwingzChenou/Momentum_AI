@@ -8,25 +8,25 @@
 [![Airflow Orchestrated](https://img.shields.io/badge/orchestrator-Apache%20Airflow-red?style=flat-square&logo=apacheairflow)](file:///Users/forget/Desktop/Project_Momentum_AI/airflow/dags/dag_bronze.py)
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](file:///Users/forget/Desktop/Project_Momentum_AI/README.md)
 
-Une plateforme industrielle et robuste de trading quantitatif implémentant une **stratégie de momentum à changement de régime (Regime-Switching)**, optimisée scientifiquement par recherche bayésienne et auditée en continu par des contrats de données stricts.
+An industrial-grade, robust quantitative trading platform implementing a **Regime-Switching Momentum Strategy**, scientifically optimized via Bayesian search and audited in real-time through strict data contracts.
 
 ---
 
-## 1. Pitch Business & Impact Métier
+## 1. Business Pitch & Value Proposition
 
-### Le Problème Métier
-Dans le secteur financier et la gestion d'actifs, les stratégies de momentum traditionnelles souffrent de deux faiblesses critiques : **le biais de survie (survivorship bias)** (qui invalide la plupart des backtests académiques en ignorant les entreprises radiées de la cote) et les **retournements brutaux de marché (drawdowns)** lors des phases de krach (Bear markets). Ces faiblesses détruisent le ratio rendement/risque et empêchent la mise en production de capital réel.
+### The Business Problem
+In the asset management industry, traditional momentum strategies suffer from two critical flaws: **survivorship bias** (which invalidates most academic backtests by ignoring companies that have been delisted) and **brutal trend reversals (drawdowns)** during bear markets. These factors degrade the risk-adjusted return profile and prevent the deployment of real capital.
 
-**Momentum AI résout ce problème à travers trois piliers d'ingénierie quantitative :**
-1. **Éradication du Biais de Survie** : L'ingestion d'un univers historique dynamique intégrant l'intégralité des **1170+ membres historiques** ayant fait partie de l'indice S&P 500 au cours des 50 dernières années (et non pas uniquement les 500 membres actuels).
-2. **Couverture de Régime Dynamique** : Une détection algorithmique du régime macro-économique global (Bull vs. Bear) réallouant instantanément le capital vers un **Top N Actions** à fort momentum en phase haussière, ou se repliant vers des **ETFs de couverture (Or, Obligations)** ou en **Cash rémunéré** en phase de marché baissier.
-3. **Moteur d'Optimisation par Score de Calmar** : Une recherche bayésienne automatisée via [Optuna](file:///Users/forget/Desktop/Project_Momentum_AI/requirements.txt) visant à maximiser le ratio de Calmar ($\text{CAGR} / \text{Max Drawdown}$), garantissant un retour sur investissement maximal pour chaque unité de risque historique acceptée.
+**Momentum AI solves this problem through three pillars of quantitative engineering:**
+1. **Survivorship Bias Eradication**: Ingests a dynamic historical universe tracking all **1,170+ historical members** of the S&P 500 over the past 50 years, rather than just the 500 currently active members.
+2. **Dynamic Regime Switching**: An algorithmic market regime detector (Bull vs. Bear) that dynamically shifts capital into a leveraged **Top N Stocks** basket during up-trends, or retreats to **hedging ETFs (Gold, Bonds)** and **interest-bearing Cash** during down-trends.
+3. **Calmar-Driven Optimization Engine**: Automated Bayesian optimization via [Optuna](file:///Users/forget/Desktop/Project_Momentum_AI/requirements.txt) designed to maximize the Calmar Ratio ($\text{CAGR} / \text{Max Drawdown}$), ensuring maximum risk-adjusted performance.
 
 ---
 
 ## 2. Architecture & Data Flow
 
-Le projet est conçu autour d'une architecture de type **Medallion (Bronze/Silver/Gold)** exécutée de façon hautement distribuée par Apache Spark et matérialisée dans Google Cloud Storage (GCS) au format Delta Lake.
+The project is structured around a **Medallion Architecture (Bronze/Silver/Gold)** powered by Apache Spark and materialized as Delta tables on Google Cloud Storage (GCS).
 
 ```mermaid
 graph TD
@@ -76,35 +76,35 @@ graph TD
     MLflow -->|Retrieve Champion Config| Streamlit
 ```
 
-### Justification de la Stack Technique
+### Stack Rationalization
 
-| Technologie | Composant clé | Justification Métier / Technique |
+| Technology | Component | Technical / Business Justification |
 | :--- | :--- | :--- |
-| **PySpark (v3.5.3)** | Moteur de Calcul | Traitement parallèle hautement performant de 50 ans d'historique de ticks journaliers pour plus de 1 100 tickers, éliminant les limites de mémoire vive inhérentes à Pandas. |
-| **Delta Lake (v3.2.1)** | Format de Stockage | Garantie des propriétés ACID sur GCS, permettant des opérations de `Merge (Upsert)` incrémentielles quotidiennes fiables sans risque de corruption des données historiques. |
-| **Great Expectations (v1.x)** | Data Quality | Implémentation de "Data Contracts" stricts. Bloque automatiquement la pipeline si le flux de prix contient des anomalies (ex: prix nuls, volume gelé) protégeant le backtest des faux signaux. |
-| **Optuna & MLflow** | Optimisation & Suivi | Algorithme d'optimisation bayésienne (TPE Sampler) couplé à un registre d'expériences structuré pour tracer, comparer et déployer la configuration de stratégie "Championne". |
-| **Apache Airflow** | Orchestrateur | Automatisation de la pipeline d'ingestion et d'optimisation hebdomadaire, assurant la fraîcheur constante des signaux opérationnels. |
-| **Streamlit** | Interface d'Exploitation | Permet aux équipes de gestion de portefeuille de visualiser les courbes d'équité, de modifier manuellement les paramètres de levier, et de charger la configuration championne en un clic. |
+| **PySpark (v3.5.3)** | Computing Engine | Highly performant parallel processing of 50 years of daily pricing ticks for over 1,100 assets, eliminating RAM bottlenecks inherent in single-node Pandas. |
+| **Delta Lake (v3.2.1)** | Storage Format | Full ACID guarantees on GCS, enabling incremental daily `Merge (Upsert)` operations without risk of historical data corruption. |
+| **Great Expectations (v1.x)** | Data Quality | Strict "Data Contracts". Blocks the pipeline if raw feeds contain pricing anomalies (e.g., zero volume, null values), protecting the optimizer from false signals. |
+| **Optuna & MLflow** | Optimization & Tracking | Tree-structured Parzen Estimator (TPE Sampler) for bayesian parameter search, coupled with structured experiment tracking to compare and deploy the "Champion" model. |
+| **Apache Airflow** | Orchestration | Automates the weekly ingestion and parameter tuning workflow, keeping the strategy signals continuously fresh and actionable. |
+| **Streamlit** | Dashboard Interface | Empowers portfolio managers to run interactive backtests, visualize equity curves, customize leverage, and load the MLflow champion parameters in one click. |
 
 ---
 
-## 3. Getting Started & Reproductibilité
+## 3. Getting Started & Reproducibility
 
-### Prérequis Système
-- **Runtime Python** : `Python >= 3.10` et `Python <= 3.12` (Recommandé : `3.10`)
-- **Runtime Java** : `OpenJDK 17` (Indispensable pour exécuter les workloads PySpark locaux)
-- **Runtime Conteneurs** : `Docker >= 20.10` et `Docker Compose >= 2.0`
+### System Requirements
+- **Python Runtime**: `Python >= 3.10` and `Python <= 3.12` (Recommended: `3.10`)
+- **Java Runtime**: `OpenJDK 17` (Mandatory for running PySpark jobs locally)
+- **Container Runtime**: `Docker >= 20.10` and `Docker Compose >= 2.0`
 
-### Installation Pas à Pas
+### Step-by-Step Installation
 
-1. **Cloner le Dépôt** :
+1. **Clone the Repository**:
    ```bash
    git clone https://github.com/TwingzChenou/Momentum_AI.git
    cd Momentum_AI
    ```
 
-2. **Configurer l'Environnement Virtuel** :
+2. **Configure Virtual Environment**:
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
@@ -112,13 +112,13 @@ graph TD
    pip install -r requirements.txt
    ```
 
-3. **Configurer les Variables d'Environnement** :
-   Copiez le fichier de configuration template et complétez-le avec vos identifiants réels :
+3. **Configure Environment Variables**:
+   Copy the environment variables template and configure it with your active credentials:
    ```bash
    cp .env.example .env
    ```
 
-Voici à quoi doit ressembler votre fichier `.env` final :
+Here is what your finalized local `.env` should look like:
 ```ini
 # ==============================================================================
 # Momentum AI - Production Environment Configuration (.env)
@@ -137,55 +137,55 @@ GCS_ACCESS_KEY_ID="GOOG_ACCESS_KEY_ID_PLACEHOLDER"
 GCS_SECRET_ACCESS_KEY="gcs_secret_access_key_placeholder_value_here"
 
 # --- APACHE SPARK CONFIGURATION ---
-# Assurez-vous que cette variable pointe vers l'environnement actif
+# Ensure this points to your active virtualenv or JDK home
 JAVA_HOME="/opt/homebrew/Caskroom/miniforge/base/envs/ml-prod"
 
 # --- MLFLOW SERVICE TRACKING ---
 MLFLOW_TRACKING_URI="http://localhost:5001"
 ```
 
-4. **Lancement de l'Infrastructure Complète (Docker)** :
-   Démarrez les services Streamlit, MLflow et le serveur de documentation Great Expectations en arrière-plan :
+4. **Launch the Container Stack (Docker)**:
+   Spin up the Streamlit dashboard, MLflow registry, and Great Expectations docs server in the background:
    ```bash
    docker-compose up -d --build
    ```
 
-5. **Accéder aux Services** :
-   - 📊 **Interface Backtest (Streamlit)** : [http://localhost:8501](http://localhost:8501)
-   - 🧪 **Tracking des Expériences (MLflow)** : [http://localhost:5001](http://localhost:5001)
-   - 🛡️ **Rapports Qualité (Data Docs GX)** : [http://localhost:8082](http://localhost:8082)
+5. **Access Application Interfaces**:
+   - 📊 **Streamlit Backtest App**: [http://localhost:8501](http://localhost:8501)
+   - 🧪 **MLflow Tracking Server**: [http://localhost:5001](http://localhost:5001)
+   - 🛡️ **Great Expectations Data Docs**: [http://localhost:8082](http://localhost:8082)
 
 ---
 
-## 4. Quality & Governance (Contrôle Qualité)
+## 4. Quality & Governance (Data Contracts)
 
-La gouvernance et la qualité des données financières sont gérées par la classe [QualityManager](file:///Users/forget/Desktop/Project_Momentum_AI/src/common/quality_manager.py) qui orchestre l'API Great Expectations 1.x Fluent. 
+Data quality and pipeline governance are strictly managed by the [QualityManager](file:///Users/forget/Desktop/Project_Momentum_AI/src/common/quality_manager.py) class, which utilizes the Great Expectations 1.x Fluent API.
 
-### Data Contracts Enforcés
-- **Bronze/Silver Prices Check** : 
-  - Non-nullité des prix ajustés (`Close`) sur un seuil strict de 95% (permettant d'exclure automatiquement les erreurs d'ingestion type ticker non trouvé ou problème de Rate Limit).
-  - Validation des bornes réalistes des prix (compris strictement entre $0.01 et $50,000).
-  - Vérification de l'activité des flux de données financiers (interdiction d'avoir un volume d'échange constamment égal à zéro).
-- **Gold Technical Check** :
-  - Validation géométrique des indicateurs comme l'ADX (qui doit être strictement compris entre 0 et 100).
-- **Ticker List Check** :
-  - Non-nullité et unicité des symboles ingérés dans l'univers de trading.
-  - Vérification de la capitalisation boursière positive.
-  - Présence obligatoire de suffixes internationaux (Regex) pour garantir l'inclusion hors USA dans l'univers d'investissement.
+### Enforced Data Contracts
+- **Bronze/Silver Prices Check**: 
+  - Non-nullity of adjusted closing prices (`Close`) checked against a strict 95% threshold (flagging rate limits or unlisted tickers).
+  - Validation of realistic price boundaries ($0.01 to $50,000).
+  - Verification of trading activity (prevents volume from being constantly 0).
+- **Gold Technical Check**:
+  - Validation of technical metrics (e.g., ADX values must lie strictly between 0 and 100).
+- **Ticker List Check**:
+  - Uniqueness and non-nullity of ingested symbols in the stock universe.
+  - Verification of positive market capitalization.
+  - Requirements for international suffixes (Regex) to ensure global index representation.
 
-### Exécuter les vérifications de qualité en local
+### Running Quality Audits Locally
 
-Pour valider l'intégrité de la pipeline et générer les rapports visuels (Data Docs), exécutez le script d'audit des données :
+To run the data quality checks manually and build the visual HTML Data Docs:
 ```bash
 python3 scripts/maintenance/run_data_audit.py
 ```
 
-Pour effectuer les vérifications de formatage de code (Linter/Formatter) :
+To run linting and code formatting checks:
 ```bash
-# Vérifier la conformité de style (PEP 8) avec ruff
+# Code style audit (PEP 8) using ruff
 ruff check src/
 
-# Formater automatiquement le code
+# Auto-format codebase
 ruff format src/
 ```
 
@@ -193,46 +193,46 @@ ruff format src/
 
 ## 5. Testing Strategy
 
-Le projet met en place une pyramide de tests robuste axée sur :
-1. **Tests d'Intégration** : Validation de la connectivité asynchrone des APIs externes (Financial Modeling Prep & Yahoo Finance) sous forte concurrence via `aiohttp` et `asyncio`.
-2. **Tests Unitaires de la Stratégie** : Simulation des calculs financiers d'allocation, des frais de courtage et du calcul dynamique du trailing stop loss.
+The pipeline features a robust testing suite divided into:
+1. **Integration Tests**: Auditing asynchronous connectivity and concurrency handling for third-party financial APIs (Financial Modeling Prep & Yahoo Finance) using `aiohttp` and `asyncio`.
+2. **Strategy Unit Tests**: Simulating financial calculations, including position weights, transactional costs, and trailing ATR stop loss triggers.
 
-### Exécuter la Suite de Tests
+### Running the Test Suite
 
-Pour lancer l'audit complet des APIs financières avec diagnostics asynchrones :
+To run the concurrent API connectivity diagnostic suite:
 ```bash
 python3 tests/api_fmp_test.py
 ```
 
-Pour exécuter les tests unitaires et générer un rapport complet de couverture de code :
+To run the unit tests and generate a full coverage report:
 ```bash
-# Lancer les tests unitaires avec pytest
+# Execute unit tests with pytest
 pytest -v
 
-# Générer le rapport de couverture
+# Generate a detailed HTML coverage report
 pytest --cov=src --cov-report=html tests/
 ```
-Le rapport HTML de couverture sera matérialisé sous `./htmlcov/index.html`.
+The coverage report is generated locally at `./htmlcov/index.html`.
 
 ---
 
 ## 6. Performance, Limits & Assumptions
 
-### Ordres de Grandeur des Performances
-- **Pipeline d'Ingestion Bronze** : Ingestion incrémentielle quotidienne multi-tickers parallélisée via Threads en **~10 secondes** pour un chunk de 100 actions, respectant les limites imposées par Yahoo Finance.
-- **Silver & Gold Processing** : Calcul distribué Spark de l'ensemble des indicateurs (SMA, ADX, ATR, Momentum) sur 20 ans d'historique hebdomadaire pour 1 170 entreprises exécuté en **~45 secondes**.
-- **Recherche Bayésienne (Optuna)** : Exécution de **50 trials complets** de backtest (incluant le chargement des données depuis BigQuery, la simulation de portefeuille hebdomadaire et le calcul des métriques de risque) en **~2 minutes**.
+### Performance Metrics
+- **Bronze Ingestion Pipeline**: Parallel chunked ingestion via threads running in **~10 seconds** per 100 tickers, preventing rate-limiting blocks.
+- **Silver & Gold Processing**: PySpark computations of indicators (SMA, ADX, ATR, Momentum) for 20 years of weekly data across 1,170+ tickers executes in **~45 seconds**.
+- **Bayesian Optimization (Optuna)**: Running **50 complete backtest trials** (GCS loading, portfolio simulation, transactional cost calculations, and risk metric aggregation) completes in **~2 minutes**.
 
-### Hypothèses de Design (Assumptions)
-- **Calcul Adjusté** : Le backtester repose exclusivement sur la colonne `AdjClose` (prix ajusté des dividendes et splits d'actions) générée à l'étape Silver pour éviter les faux signaux de momentum fictifs créés par les détachements de coupons ou les divisions de titres.
-- **Fréquence Hebdomadaire** : Bien que les données Bronze soient quotidiennes, la simulation de portefeuille et les rééquilibrages s'effectuent tous les **vendredis soirs (W-FRI)** à la clôture, pour filtrer le "bruit" quotidien du marché et réduire considérablement les coûts de transaction du fonds.
-- **Clé GCP active** : Le bon fonctionnement du stockage distribué présuppose la présence d'une clé de compte de service GCP valide dotée des rôles `Storage Admin` et `BigQuery Admin` placée dans `config/keys_gcp/`.
+### Design Assumptions
+- **Dividends & Splits Adjusted**: Backtests rely strictly on the `AdjClose` column built at the Silver layer to filter out artificial price gaps caused by corporate actions.
+- **Weekly Rebalancing (W-FRI)**: Portfolio simulations and signals execute weekly at Friday market close (W-FRI) to filter daily market noise and reduce transaction costs.
+- **Active GCP Key**: Distributed processing assumes a valid GCP Service Account JSON key exists in `config/keys_gcp/` with `Storage Admin` and `BigQuery Admin` roles.
 
-### Limitations Connues
-- **Frais de courtage forfaitaires** : Les frais de transaction sont actuellement modélisés par un pourcentage fixe constant par transaction (ex: 0.1% par défaut). Le glissement de prix (*slippage*) lié à l'impact de marché sur de très gros volumes n'est pas modélisé.
-- **Régime Long-Only** : Le moteur n'autorise que les positions longues (acheteuses). La vente à découvert (*short selling*) n'est pas supportée dans le cadre de cette allocation de régime.
-- **Execution à la clôture** : Les ordres sont supposés être exécutés exactement au cours de clôture du jour de signal, sans temps de latence opérationnelle (*market lag*).
+### Known Limitations
+- **Flat-Rate Transaction Fees**: Transaction fees are currently modeled as a flat percentage of traded volume (0.1% by default). Market impact (slippage) for large order sizes is not simulated.
+- **Long-Only Strategy**: The backtest engine currently only permits buying assets (long-only). Short selling and derivatives hedging are not supported.
+- **At-Close Execution**: Trades are assumed to execute exactly at the Friday closing price, assuming no operational latency or market lag.
 
 ---
 
-> **Note de l'équipe d'Ingénierie Quantitative** : Pour toute évolution majeure de la logique de calcul des features, veuillez mettre à jour les schémas Great Expectations correspondants dans [quality_manager.py](file:///Users/forget/Desktop/Project_Momentum_AI/src/common/quality_manager.py) pour éviter toute rupture de contrat de données en aval.
+> **Note for the Quant Engineering Team**: For any updates to technical indicator features, ensure corresponding expectations are updated in [quality_manager.py](file:///Users/forget/Desktop/Project_Momentum_AI/src/common/quality_manager.py) to prevent upstream pipeline failures.
