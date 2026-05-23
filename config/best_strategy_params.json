@@ -1,16 +1,16 @@
 {
     "sp500_sma_fast": 26,
-    "sp500_sma_slow": 50,
-    "stock_sma_fast": 15,
-    "stock_sma_slow": 45,
-    "etf_sma_fast": 12,
-    "etf_sma_slow": 40,
-    "stock_adx_threshold": 15,
+    "sp500_sma_slow": 45,
+    "stock_sma_fast": 21,
+    "stock_sma_slow": 40,
+    "etf_sma_fast": 14,
+    "etf_sma_slow": 45,
+    "stock_adx_threshold": 20,
     "stock_atr_threshold": 30,
-    "stock_mom_period": 13,
-    "etf_mom_period": 26,
-    "top_n": 10,
+    "stock_mom_period": 52,
+    "etf_mom_period": 13,
+    "top_n": 5,
     "rebalance_freq": "1Y",
-    "buffer_n": 30,
-    "atr_stop_multiple": 1.0
+    "buffer_n": 5,
+    "atr_stop_multiple": 3.0
 }
