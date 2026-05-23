@@ -126,7 +126,7 @@ def objective_silver(trial, sp500_raw, df_etf_raw, df_stocks_raw):
             etfs = df_etf_raw[['Ticker', 'Date', 'Close']].copy().sort_values(['Ticker', 'Date'])
 
             # 3. Stocks (Données brutes)
-            cols = ['Ticker', 'Date', 'Close']
+            cols = ['Ticker', 'Date', 'Close', 'High', 'Low']
             if 'ATR' in df_stocks_raw.columns: cols.append('ATR')
             stocks = df_stocks_raw[cols].copy().sort_values(['Ticker', 'Date'])
 

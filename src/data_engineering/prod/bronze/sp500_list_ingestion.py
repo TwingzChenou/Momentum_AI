@@ -11,13 +11,12 @@ from src.common.logging_utils import setup_logging
 from src.common.setup_spark import create_spark_session
 from src.common.quality_manager import QualityManager
 from config.config_spark import Paths
-
 def fetch_sp500_from_tradingview():
     """
-    Fetches S&P 500 constituents by first getting tickers from Wikipedia 
+    Fetches S&P 500 constituents by first getting tickers and addition dates from Wikipedia 
     and then querying TradingView for the specified metadata.
     """
-    logger.info("🌐 Fetching S&P 500 tickers from Wikipedia...")
+    logger.info("🌐 Fetching S&P 500 tickers and addition dates from Wikipedia...")
     try:
         import requests
         url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
@@ -25,10 +24,13 @@ def fetch_sp500_from_tradingview():
         response = requests.get(url, headers=headers)
         tables = pd.read_html(response.text)
         df_wiki = tables[0]
-        tickers = df_wiki['Symbol'].tolist()
         
-        # Yahoo/TradingView use '-' instead of '.' for classes (BRK.B -> BRK-B)
-        tickers = [t.replace('.', '-') for t in tickers]
+        # Keep Symbol and Date added columns, renaming to match our schema
+        df_wiki_cleaned = df_wiki[['Symbol', 'Date added']].copy()
+        df_wiki_cleaned['Symbol'] = df_wiki_cleaned['Symbol'].str.replace('.', '-', regex=False)
+        df_wiki_cleaned = df_wiki_cleaned.rename(columns={'Symbol': 'symbol', 'Date added': 'dateFirstAdded'})
+        
+        tickers = df_wiki_cleaned['symbol'].tolist()
         logger.info(f"✅ Found {len(tickers)} tickers on Wikipedia.")
     except Exception as e:
         logger.error(f"❌ Failed to fetch from Wikipedia: {e}")
@@ -67,8 +69,11 @@ def fetch_sp500_from_tradingview():
             'exchange': 'exchangeShortName'
         })
         
-        logger.info(f"✅ Successfully enriched {len(df_tv)} tickers with TradingView metadata.")
-        return df_tv
+        # Merge Wikipedia 'dateFirstAdded' with TradingView metadata
+        df_merged = pd.merge(df_tv, df_wiki_cleaned, on='symbol', how='left')
+        
+        logger.info(f"✅ Successfully enriched {len(df_merged)} tickers with TradingView metadata and Wikipedia dates.")
+        return df_merged
         
     except Exception as e:
         logger.error(f"❌ Failed to query TradingView: {e}")

@@ -172,6 +172,7 @@ class RegimeSwitchingMomentumBacktester:
         # 2. STOCKS
         if not df_stocks.empty:
             df_stocks['Date'] = pd.to_datetime(df_stocks['Date']).dt.normalize()
+            df_stocks = df_stocks.dropna(subset=['High', 'Low', 'Close'])
             df_stocks = df_stocks.sort_values(['Ticker', 'Date'])
             
             # On ne recalcule que si les colonnes manquent
@@ -181,9 +182,15 @@ class RegimeSwitchingMomentumBacktester:
                 df_stocks['SMA_slow'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: ta.trend.sma_indicator(x, window=self.config.get('stock_sma_slow', 50), fillna=True))
                 df_stocks['Momentum_XM'] = df_stocks.groupby('Ticker')['Close'].transform(lambda x: x.pct_change(self.config.get('stock_mom_period', 13)))
                 
-                # Compute ATR and ADX properly per group
-                df_stocks['ATR'] = df_stocks.groupby('Ticker').apply(lambda x: ta.volatility.AverageTrueRange(high=x['High'], low=x['Low'], close=x['Close'], window=14, fillna=True).average_true_range()).reset_index(level=0, drop=True)
-                df_stocks['ADX'] = df_stocks.groupby('Ticker').apply(lambda x: ta.trend.ADXIndicator(high=x['High'], low=x['Low'], close=x['Close'], window=14, fillna=True).adx()).reset_index(level=0, drop=True)
+                # Compute ATR and ADX properly per group, handling short historical series gracefully
+                df_stocks['ATR'] = df_stocks.groupby('Ticker').apply(
+                    lambda x: ta.volatility.AverageTrueRange(high=x['High'], low=x['Low'], close=x['Close'], window=14, fillna=True).average_true_range() 
+                    if len(x) >= 28 else pd.Series(np.nan, index=x.index)
+                ).reset_index(level=0, drop=True)
+                df_stocks['ADX'] = df_stocks.groupby('Ticker').apply(
+                    lambda x: ta.trend.ADXIndicator(high=x['High'], low=x['Low'], close=x['Close'], window=14, fillna=True).adx() 
+                    if len(x) >= 28 else pd.Series(np.nan, index=x.index)
+                ).reset_index(level=0, drop=True)
             
             # Filtres techniques (On utilise ADX et ATR de BigQuery si possible)
             cond_trend = (df_stocks['SMA_fast'] > df_stocks['SMA_slow']) & (df_stocks['Close'] > df_stocks['SMA_slow'])

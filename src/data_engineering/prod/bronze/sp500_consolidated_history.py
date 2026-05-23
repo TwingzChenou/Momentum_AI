@@ -151,12 +151,12 @@ def main():
         
         # Current active tickers in base (Date_end is NULL)
         active_in_base = df_base.filter(F.col("Date_end").isNull())
-        
-        # New ADDS: in Latest but NOT in active_in_base
-        new_adds = latest_tickers.join(active_in_base, "Ticker", "left_anti") \
-                                 .withColumn("Date_start", F.current_date()) \
-                                 .withColumn("Date_end", F.lit(None).cast("date"))
-        
+                # New ADDS: in Latest but NOT in active_in_base
+        new_adds = latest_tickers.join(active_in_base, "Ticker", "left_anti")
+        new_adds = new_adds.join(df_latest.select(F.col("symbol").alias("Ticker"), F.col("dateFirstAdded")), "Ticker", "left") \
+                           .withColumn("Date_start", F.coalesce(F.to_date(F.col("dateFirstAdded")), F.current_date())) \
+                           .withColumn("Date_end", F.lit(None).cast("date")) \
+                           .drop("dateFirstAdded")
         # New REMOVES: in active_in_base but NOT in Latest
         new_removes = active_in_base.join(latest_tickers, "Ticker", "left_anti") \
                                     .withColumn("Date_end", F.current_date())
