@@ -45,6 +45,7 @@ checkpoint*
 config/keys_gcp/
 
 # ML & Logs
+mlflow_data/
 mlruns/
 mlflow.db
 logs/

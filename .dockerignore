@@ -4,6 +4,7 @@
 data/
 gs_cache/
 mlruns/
+mlflow_data/
 catboost_info/
 notebooks/
 keys/
@@ -13,3 +14,4 @@ config/keys_gcp/
 *.parquet
 *.delta
 *.csv
+

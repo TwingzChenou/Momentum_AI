@@ -14,6 +14,7 @@ with DAG(
     description='Pipeline d\'ingestion Bronze Momentum AI (Correction Spark Config)',
     schedule_interval='15 22 * * 5',  # Exécution tous les vendredis à 22:15
     max_active_runs=1,  # Limite le nombre de runs simultanés à 1
+    max_active_tasks=1,  # Limite à 1 tâche active pour éviter les crashes de RAM JVM sur Docker local
     catchup=False,  # Ne pas exécuter les runs manquées
     tags=['prod', 'bronze'],  # Tags pour filtrer et organiser les DAGs
 ) as dag:
